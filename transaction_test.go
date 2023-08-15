@@ -17,7 +17,10 @@ func (ctx *ExeContext) testClientTransactions(num int, tester *testing.T) {
 		tx := ctx.RandomTransaction()
 
 		txBytes = ctx.ToBytes(tx)
-		ctx.FromBytes(txBytes, &tx1)
+		ok := ctx.FromBytes(txBytes, &tx1)
+		if !ok {
+			tester.Fatal("couldn't parse tx:", ctx.txModel, ctx.sigContext)
+		}
 
 		val, err := ctx.VerifyIncomingTransaction(tx)
 		if !val {
@@ -77,7 +80,10 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 		tx = ctxClient.RandomTransaction()
 
 		txBytes = ctxClient.ToBytes(tx)
-		ctxPeer.FromBytes(txBytes, &tx1)
+		ok := ctxPeer.FromBytes(txBytes, &tx1)
+		if !ok {
+			tester.Fatal("couldn't parse tx:", ctxPeer.txModel, ctxPeer.sigContext)
+		}
 
 		val, err := ctxClient.VerifyIncomingTransaction(tx)
 		if !val {
@@ -158,7 +164,10 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 			tx = ctxClient.RandomTransaction()
 
 			txBytes = ctxClient.ToBytes(tx)
-			ctxPeer.FromBytes(txBytes, &tx1)
+			ok := ctxPeer.FromBytes(txBytes, &tx1)
+			if !ok {
+				tester.Fatal("couldn't parse tx:", ctxPeer.txModel, ctxPeer.sigContext)
+			}
 
 			averageTxSize += len(txBytes)
 

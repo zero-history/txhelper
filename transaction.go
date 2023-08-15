@@ -295,7 +295,10 @@ func (ctx *ExeContext) ToBytes(tx *Transaction) []byte {
 	return buffer.Bytes()
 }
 
-func (ctx *ExeContext) FromBytes(arr []byte, tx *Transaction) {
+func (ctx *ExeContext) FromBytes(arr []byte, tx *Transaction) bool {
+	if len(arr) <= 2 {
+		return false
+	}
 	var i uint8
 	pointer := 0
 	inSize := arr[pointer]
@@ -305,11 +308,26 @@ func (ctx *ExeContext) FromBytes(arr []byte, tx *Transaction) {
 	tx.Data.Outputs = make([]OutputData, outSize)
 	pointer += 1
 
+	if len(arr) < pointer+sha256.Size*int(inSize) {
+		return false
+	}
+
 	for i = 0; i < inSize; i++ {
 		tx.Data.Inputs[i].Header = make([]byte, sha256.Size)
 		copy(tx.Data.Inputs[i].Header, arr[pointer:])
 		pointer += sha256.Size
 	}
+
+	if ctx.txModel == 1 || ctx.txModel == 3 || ctx.txModel == 5 {
+		if len(arr) < pointer+(int(ctx.sigContext.PkSize)+1)*(int(outSize)-int(inSize))+int(ctx.payloadSize)*int(outSize) {
+			return false
+		}
+	} else {
+		if len(arr) < pointer+int(ctx.payloadSize)*int(outSize) {
+			return false
+		}
+	}
+
 	for i = 0; i < outSize; i++ {
 		if int(i) >= len(tx.Data.Inputs) || ctx.txModel == 1 || ctx.txModel == 3 || ctx.txModel == 5 {
 			tx.Data.Outputs[i].Pk = make([]byte, ctx.sigContext.PkSize)
@@ -325,12 +343,22 @@ func (ctx *ExeContext) FromBytes(arr []byte, tx *Transaction) {
 		pointer += int(ctx.payloadSize)
 	}
 
+	if len(arr) < pointer+1 {
+		return false
+	}
+
 	sigSize := arr[pointer]
 	pointer += 1
+
+	if len(arr) < pointer+int(sigSize)*int(ctx.sigContext.SigSize) {
+		return false
+	}
+
 	tx.Txh.Kyber = make([]Signature, sigSize)
 	for i = 0; i < sigSize; i++ {
 		tx.Txh.Kyber[i] = make([]byte, ctx.sigContext.SigSize)
 		copy(tx.Txh.Kyber[i], arr[pointer:])
 		pointer += int(ctx.sigContext.SigSize)
 	}
+	return true
 }
