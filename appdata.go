@@ -114,7 +114,7 @@ func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, *string) {
 	// arrange ids of outputs for txHeader insertion
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
 		for i = 0; i < len(data.Outputs); i++ {
-			data.Outputs[i].u.id = ctx.currentOutputs + i // must save every output with new id
+			data.Outputs[i].u.id = ctx.CurrentOutputs + i // must save every output with new id
 		}
 	} else if ctx.txModel == 5 {
 		for i = 0; i < len(data.Outputs); i++ {
@@ -124,7 +124,7 @@ func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, *string) {
 	} else if ctx.txModel == 6 { // must save every new output pk with new id
 		j := 0
 		for i = len(data.Inputs); i < len(data.Outputs); i++ {
-			data.Outputs[i].u.id = ctx.currentUsers + j // must save every new pk (user) with new id
+			data.Outputs[i].u.id = ctx.CurrentUsers + j // must save every new pk (user) with new id
 			j++
 		}
 	} else {
@@ -179,7 +179,7 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
 		}
-		ctx.currentOutputs += len(tx.Data.Outputs)
+		ctx.CurrentOutputs += len(tx.Data.Outputs)
 	}
 	// account
 	if ctx.txModel == 2 || ctx.txModel == 4 {
@@ -199,8 +199,8 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
 		}
-		ctx.currentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs) // update the current user size
-		ctx.currentOutputs += len(tx.Data.Outputs)                     // update the current output number
+		ctx.CurrentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs) // update the current user size
+		ctx.CurrentOutputs += len(tx.Data.Outputs)                     // update the current output number
 	} else if ctx.txModel == 5 {
 		// delete inputs
 		for i = 0; i < len(tx.Data.Inputs); i++ {
@@ -213,8 +213,8 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
 		}
-		ctx.currentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
-		ctx.deletedOutputs += len(tx.Data.Inputs)
+		ctx.CurrentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
+		ctx.DeletedOutputs += len(tx.Data.Inputs)
 	} else if ctx.txModel == 6 {
 		// modify inputs (h, -, data, n, sig) including "used"
 		for i = 0; i < len(tx.Data.Inputs); i++ {
@@ -236,9 +236,9 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 			tx.Data.Outputs[i].u.Txns[0] = txn
 			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], tx.Txh.Kyber[i])
 		}
-		ctx.currentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs)
-		ctx.currentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
-		ctx.deletedOutputs += len(tx.Data.Inputs)
+		ctx.CurrentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs)
+		ctx.CurrentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
+		ctx.DeletedOutputs += len(tx.Data.Inputs)
 	}
 }
 
@@ -278,7 +278,7 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 	for i = 0; i < int(outSize); i++ {
 		// a new user with new pk can be created or the existing user with new N can be created
 		choice := rand2.Int() % 2
-		if (choice == 0 || ctx.currentUsers >= ctx.totalUsers) && int(inSize) > i && ctx.txModel != 5 { // use input pk with new n
+		if (choice == 0 || ctx.CurrentUsers >= ctx.TotalUsers) && int(inSize) > i && ctx.txModel != 5 { // use input pk with new n
 			jsonBytes, _ = json.Marshal(&data.Inputs[i].u)
 			if json.Unmarshal(jsonBytes, &data.Outputs[i].u) != nil {
 				log.Fatal("could not copy data")
@@ -294,7 +294,7 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 				Data:   make([]byte, ctx.payloadSize),
 				UDelta: make([]byte, 0),
 			}
-			ctx.currentUsers++
+			ctx.CurrentUsers++
 		}
 		data.Outputs[i].u.id = ctx.outputPointer // save for client db
 		ctx.insertClientOut(ctx.outputPointer, &data.Outputs[i].u)
@@ -323,7 +323,7 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 		copy(data.Outputs[i].Data, data.Outputs[i].u.Data)
 		// update variables
 		ctx.outputPointer++
-		ctx.currentOutputs++
+		ctx.CurrentOutputs++
 	}
 }
 
@@ -339,10 +339,10 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 		inSize = outSize // all inputs should be in outputs
 	}
 
-	if ctx.currentUsers == 0 {
+	if ctx.CurrentUsers == 0 {
 		inSize = 0
 		outSize = ctx.averageInputMax // to avoid overlapping between pk for the 2nd transaction
-	} else if ctx.currentUsers == ctx.totalUsers { // should not add more accounts
+	} else if ctx.CurrentUsers == ctx.TotalUsers { // should not add more accounts
 		if inSize == 0 {
 			inSize = 1 // Otherwise, there will be zero input/output transactions
 		}
@@ -357,10 +357,10 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 	id = rand2.Int() % 0xff
 	for i = 0; i < inSize; i++ {
 		id += 1
-		data.Inputs[i].u.id = (id) % ctx.currentUsers // save for db
+		data.Inputs[i].u.id = (id) % ctx.CurrentUsers // save for db
 		// get random user from client db
 		if ctx.getClientOut(data.Inputs[i].u.id, &data.Inputs[i].u) == false {
-			log.Fatal("accAppData: could not find user id:", id, inSize, data.Inputs[i].u.id, ctx.currentUsers)
+			log.Fatal("accAppData: could not find user id:", id, inSize, data.Inputs[i].u.id, ctx.CurrentUsers)
 		}
 		//fmt.Println("input:", data.Inputs[i].u.id, data.Inputs[i].u.Keys)
 		// if N = 0 is zero then no previous outputs were created
@@ -404,9 +404,9 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 			Data:   make([]byte, ctx.payloadSize),
 			UDelta: make([]byte, 0),
 		}
-		data.Outputs[i].u.id = ctx.currentUsers                   // save for db
-		ctx.insertClientOut(ctx.currentUsers, &data.Outputs[i].u) // todo fix this
-		ctx.currentUsers += 1
+		data.Outputs[i].u.id = ctx.CurrentUsers                   // save for db
+		ctx.insertClientOut(ctx.CurrentUsers, &data.Outputs[i].u) // todo fix this
+		ctx.CurrentUsers += 1
 		keyBuf.Reset()
 		//fmt.Println("created:", data.Outputs[i].u.id, data.Outputs[i].u.Keys)
 		// tests
@@ -432,5 +432,5 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 		copy(data.Outputs[i].Data, data.Outputs[i].u.Data)
 	}
 	ctx.outputPointer += int(outSize)
-	ctx.outputPointer %= ctx.totalUsers
+	ctx.outputPointer %= ctx.TotalUsers
 }

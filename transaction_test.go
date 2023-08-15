@@ -73,8 +73,8 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 
 	rand.NewSource(0)
 
-	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.totalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
-	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.totalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
+	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
+	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
 
 	for i := 0; i < num; i++ {
 		tx = ctxClient.RandomTransaction()
@@ -210,8 +210,8 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println("verification passed:", ctxPeer.txModel, 32, timeElapsed, ctxPeer.totalTx, ctxPeer.totalUsers,
-				ctxPeer.currentUsers, ctxPeer.currentOutputs, ctxPeer.deletedOutputs, averageTxSize/txNum,
+			fmt.Println("verification passed:", ctxPeer.txModel, 32, timeElapsed, ctxPeer.TotalTx, ctxPeer.TotalUsers,
+				ctxPeer.CurrentUsers, ctxPeer.CurrentOutputs, ctxPeer.DeletedOutputs, averageTxSize/txNum,
 				averageTxVerTime/time.Duration(txNum), averageUpdateTime/time.Duration(txNum), float32(averageInSize)/float32(txNum),
 				float32(averageOutSize)/float32(txNum), fi.Size())
 		}

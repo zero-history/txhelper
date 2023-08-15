@@ -26,15 +26,15 @@ type ExeContext struct {
 	averageOutputMax uint8  // average number of outputs  will be in [0, averageOutputMax]
 	distributionType int    // output Data size distribution
 
-	totalUsers int // total number of users represented if this is a client
-	totalTx    int // total number of transactions if this is a peer
-	totalBlock int // total number of blocks  if this is a peer
+	TotalUsers int // total number of users represented if this is a client
+	TotalTx    int // total number of transactions if this is a peer
+	TotalBlock int // total number of blocks  if this is a peer
 
 	inputPointer   int // inputs are chosen from round-robin method
 	outputPointer  int // inputs are chosen from round-robin method
-	currentUsers   int
-	currentOutputs int // in Origami, currentUsers = currentOutputs
-	deletedOutputs int //
+	CurrentUsers   int
+	CurrentOutputs int // in Origami, CurrentUsers = CurrentOutputs
+	DeletedOutputs int //
 	groupContext   key.Suite
 
 	bnQ   *C.BIGNUM
@@ -56,14 +56,14 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 		averageInputMax:  averageInputMax,
 		averageOutputMax: averageOutputMax,
 		distributionType: distributionType,
-		totalUsers:       totalUsers,
-		totalBlock:       0,
-		totalTx:          0,
+		TotalUsers:       totalUsers,
+		TotalBlock:       0,
+		TotalTx:          0,
 		inputPointer:     0,
 		outputPointer:    0,
-		currentUsers:     0,
-		currentOutputs:   0,
-		deletedOutputs:   0,
+		CurrentUsers:     0,
+		CurrentOutputs:   0,
+		DeletedOutputs:   0,
 	}
 
 	// generate group context
@@ -79,7 +79,7 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 	}
 
 	if int(averageInputMax) >= totalUsers {
-		log.Fatal("can't be averageInputMax >= totalUsers")
+		log.Fatal("can't be averageInputMax >= TotalUsers")
 	}
 
 	// generate all users for clients

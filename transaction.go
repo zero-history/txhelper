@@ -95,7 +95,7 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 func (ctx *ExeContext) InsertTxHeader(txn int, tx *Transaction) {
 	if ctx.uType == 2 {
 		ctx.insertPeerTxHeader(txn, tx)
-		ctx.totalTx += 1
+		ctx.TotalTx += 1
 	} else {
 		log.Fatal("only peers can add txHeaders")
 	}
@@ -139,10 +139,10 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
 		var val bool
 		//set used to 0
-		used := make([]uint8, ctx.currentOutputs)
-		usedHeader := make([][]byte, ctx.currentOutputs)
+		used := make([]uint8, ctx.CurrentOutputs)
+		usedHeader := make([][]byte, ctx.CurrentOutputs)
 		//verify all tx from 0 while resetting used
-		for i := 0; i < ctx.totalTx; i++ {
+		for i := 0; i < ctx.TotalTx; i++ {
 			tx, ok, errM := ctx.getStoredTx(i)
 			if !ok {
 				return false, errM
@@ -193,7 +193,7 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 		//var user User
 		var pk Pubkey
 		buffer := make([]byte, 33+ctx.sigContext.PkSize)
-		for i := 0; i < ctx.totalTx; i++ {
+		for i := 0; i < ctx.TotalTx; i++ {
 			ctx.getTxHeader(i, &txh)
 			copy(buffer, txh.activityProof)
 			copy(buffer[33:], txh.excessPK)
@@ -215,7 +215,7 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 		if err != nil {
 			return false, err
 		}
-		for i := 0; i < ctx.currentUsers; i++ {
+		for i := 0; i < ctx.CurrentUsers; i++ {
 			found, _ := ctx.getPeerOutFromID(i, &user)
 			if !found {
 				errM := "user doesn't exist"

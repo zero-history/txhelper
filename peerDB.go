@@ -460,7 +460,7 @@ func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
 	C.BN_set_bit(temp, 255) // one
 	C.BN_set_bit(d, 255)
 
-	activities := make([]bytes.Buffer, ctx.currentUsers)
+	activities := make([]bytes.Buffer, ctx.CurrentUsers)
 	var activity []byte
 	var outBuf []byte
 	txn := 0
