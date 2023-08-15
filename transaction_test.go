@@ -21,13 +21,13 @@ func (ctx *ExeContext) testClientTransactions(num int, tester *testing.T) {
 
 		val, err := ctx.VerifyIncomingTransaction(tx)
 		if !val {
-			tester.Errorf("invalid transaction creation:" + *err)
+			tester.Fatal("invalid transaction creation:" + *err)
 		}
 
 		ctx.PrepareAppDataClient(&tx1.Data)
 		val, err = ctx.VerifyIncomingTransaction(&tx1)
 		if !val {
-			tester.Errorf("invalid transaction convertion:" + *err)
+			tester.Fatal("invalid transaction convertion:" + *err)
 		}
 
 		ctx.UpdateAppDataClient(&tx.Data)
@@ -81,14 +81,14 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 
 		val, err := ctxClient.VerifyIncomingTransaction(tx)
 		if !val {
-			tester.Errorf("invalid transaction convertion in the client:" + *err)
+			tester.Fatal("invalid transaction convertion in the client:" + *err)
 		}
 
 		ctxClient.UpdateAppDataClient(&tx.Data)
 
 		val, err = ctxPeer.VerifyIncomingTransaction(&tx1)
 		if !val {
-			tester.Errorf("invalid transaction convertion in the peer:" + *err)
+			tester.Fatal("invalid transaction convertion in the peer:" + *err)
 		}
 
 		ctxPeer.UpdateAppDataPeer(i, &tx1)
@@ -97,7 +97,7 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 
 	val, err := ctxPeer.VerifyStoredAllTransaction()
 	if !val {
-		tester.Errorf("invalid blockchain was created:" + *err)
+		tester.Fatal("invalid blockchain was created:" + *err)
 	}
 }
 
@@ -192,7 +192,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 		timeElapsed := time.Since(start)
 		result = val
 		if err != nil || val == false {
-			log.Fatal("verification failed:", val, ", ", *err)
+			tester.Fatal("verification failed:", val, ", ", *err)
 		} else {
 			file, err := os.Open("peer" + strconv.FormatInt(int64(ctxPeer.exeId), 10) + ".db")
 			if err != nil {

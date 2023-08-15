@@ -424,16 +424,13 @@ func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
 	txh.activityProof = ctx.computeAppActivity(data) // to compute header - must be after computeOutIdentifier
-	txh.excessPK = ctx.sigContext.aggregatePKFromPairs(keysP, negkeysP)
+	txh.excessPK = ctx.sigContext.diffPKFromPairs(keysP, negkeysP)
 
 	txh.Kyber = make([]Signature, 1)
 
 	if len(txh.activityProof) != 33 {
 		log.Fatal("error in activities")
 	}
-	buffer.Write(txh.activityProof)
-	buffer.Write(txh.excessPK)
-	txh.Kyber[0] = ctx.sigContext.aggregateSign(keysP, negkeysP, buffer.Bytes())
 
 	keybuffer.Reset()
 	keybuffer.Write(txh.excessPK)
@@ -442,6 +439,10 @@ func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 	ctx.sigContext.generate(&keys)
 	pk = ctx.sigContext.getPubKey(&keys)
 	ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+
+	buffer.Write(txh.activityProof)
+	buffer.Write(txh.excessPK)
+	txh.Kyber[0] = ctx.sigContext.diffSign(keysP, negkeysP, &pk, buffer.Bytes())
 }
 
 func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
@@ -473,7 +474,7 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
 	txh.activityProof = ctx.computeAppActivity(data) // to compute header - must be after computeOutIdentifier
-	txh.excessPK = ctx.sigContext.aggregatePK(keysP, negkeysP)
+	txh.excessPK = ctx.sigContext.diffPK(keysP, negkeysP)
 
 	buffer.Write(txh.activityProof)
 	buffer.Write(txh.excessPK)

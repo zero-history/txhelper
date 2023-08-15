@@ -3,7 +3,9 @@ package txhelper
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func TestSig(tester *testing.T) {
@@ -43,7 +45,7 @@ func TestSig(tester *testing.T) {
 	}
 }
 
-func TestAggregateSig(tester *testing.T) {
+func TestDiffSig(tester *testing.T) {
 	for i := int32(1); i < 3; i++ {
 		sigCtx := NewSigContext(i)
 		for j := 0; j < 10; j++ {
@@ -77,37 +79,59 @@ func TestAggregateSig(tester *testing.T) {
 				pks1[i] = &pks[i]
 				negpks1[i] = &negpks[i]
 			}
-			sig := sigCtx.aggregateSign(keys1, negkeys1, msg)
+			pk1Bytes := sigCtx.diffPK(pks1, negpks1)
+			sigCtx.unmarshelPublicKeysFromBytes(&pk2, pk1Bytes)
 
-			pk1Bytes := sigCtx.aggregatePK(pks1, negpks1)
+			sig := sigCtx.diffSign(keys1, negkeys1, &pk2, msg)
+			if !sigCtx.verify(&pk2, msg, sig) {
+				tester.Errorf("invalid diff signature")
+			}
+
+			pk1Bytes = sigCtx.diffPK(pks1, negpks1)
 			sigCtx.unmarshelPublicKeysFromBytes(&pk2, pk1Bytes)
 			if !sigCtx.verify(&pk2, msg, sig) {
-				tester.Errorf("invalid aggregation")
+				tester.Errorf("invalid difference pks1")
 			}
 
-			pk1Bytes = sigCtx.aggregatePK(pks1, negpks1)
-			sigCtx.unmarshelPublicKeysFromBytes(&pk2, pk1Bytes)
-			if !sigCtx.verify(&pk2, msg, sig) {
-				tester.Errorf("invalid aggregation")
-			}
-
-			pk2Bytes := sigCtx.aggregatePKFromPairs(keys1, negkeys1)
+			pk2Bytes := sigCtx.diffPKFromPairs(keys1, negkeys1)
 			sigCtx.unmarshelPublicKeysFromBytes(&pk3, pk2Bytes)
 			if !sigCtx.verify(&pk3, msg, sig) {
-				tester.Errorf("invalid aggregation")
+				tester.Errorf("invalid difference keys1")
 			}
 
-			pk2Bytes = sigCtx.aggregatePKFromPairs(keys2, negkeys2)
+			pk2Bytes = sigCtx.diffPKFromPairs(keys2, negkeys2)
 			sigCtx.unmarshelPublicKeysFromBytes(&pk3, pk2Bytes)
 			if !sigCtx.verify(&pk3, msg, sig) {
-				tester.Errorf("invalid aggregation")
+				tester.Errorf("invalid difference keys2")
 			}
+		}
+	}
+}
 
-			pk2Bytes = sigCtx.aggregatePKFromPairs(keys2, negkeys2)
-			sigCtx.unmarshelPublicKeysFromBytes(&pk3, pk2Bytes)
-			if !sigCtx.verify(&pk3, msg, sig) {
-				tester.Errorf("invalid aggregation")
+func TestAggregateBLSSig(tester *testing.T) {
+	sigCtx := NewSigContext(2)
+	for j := 0; j < 10; j++ {
+		msg := make([]byte, 32)
+		rand.Read(msg) // some msg, doesn't have to be purely random
+		num := 5
+		keys := make([]SigKeyPair, num)
+		pks := make([]Pubkey, num)
+		pksP := make([]*Pubkey, num)
+		sigs := make([]Signature, num)
+
+		for i := 0; i < num; i++ {
+			sigCtx.generate(&keys[i])
+			pks[i] = sigCtx.getPubKey(&keys[i])
+			pksP[i] = &pks[i]
+			sigs[i] = sigCtx.sign(&keys[i], msg)
+			if !sigCtx.verify(&pks[i], msg, sigs[i]) {
+				tester.Fatal("invalid individual signature")
 			}
+		}
+
+		aggregateSig := sigCtx.aggregateSignatures(sigs)
+		if !sigCtx.batchVerify(pksP, msg, aggregateSig) {
+			tester.Fatal("invalid aggregate BLS signature")
 		}
 	}
 }
@@ -142,4 +166,43 @@ func BenchmarkSignatureContext_VerifyBLS(b *testing.B) {
 		s = sigCtx.verify(&pk, msg, sig)
 	}
 	result = s
+}
+
+func BenchmarkSignatureContext_BatchVerify(tester *testing.B) {
+	sigCtx := NewSigContext(2)
+	nums := []int{5, 10, 100}
+	for j := range nums {
+		msg := make([]byte, 32)
+		rand.Read(msg) // some msg, doesn't have to be purely random
+		keys := make([]SigKeyPair, nums[j])
+		pks := make([]Pubkey, nums[j])
+		pksP := make([]*Pubkey, nums[j])
+		sigs := make([]Signature, nums[j])
+
+		for i := 0; i < nums[j]; i++ {
+			sigCtx.generate(&keys[i])
+			pks[i] = sigCtx.getPubKey(&keys[i])
+			pksP[i] = &pks[i]
+			sigs[i] = sigCtx.sign(&keys[i], msg)
+			if !sigCtx.verify(&pks[i], msg, sigs[i]) {
+				tester.Fatal("invalid individual signature")
+			}
+		}
+
+		var sigVerTime time.Duration
+
+		aggregateSig := sigCtx.aggregateSignatures(sigs)
+		var s bool
+		for i := 0; i < tester.N; i++ {
+			start := time.Now()
+			s = sigCtx.batchVerify(pksP, msg, aggregateSig) // todo add aggregated
+			sigVerTime += time.Since(start)
+		}
+		result = s
+		if !result {
+			tester.Fatal("invalid aggregate BLS signature")
+		} else {
+			fmt.Print("verification time per pk from (", nums[j], "):", sigVerTime/time.Duration(nums[j]*tester.N))
+		}
+	}
 }

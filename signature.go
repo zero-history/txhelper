@@ -3,6 +3,7 @@ package txhelper
 import (
 	"bytes"
 	"crypto/cipher"
+	"errors"
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"go.dedis.ch/kyber/v3/pairing"
@@ -23,6 +24,10 @@ type Signature []byte
 
 type Generator interface {
 	NewKey(random cipher.Stream) kyber.Scalar
+}
+
+type hashablePoint interface {
+	Hash([]byte) kyber.Point
 }
 
 type Pubkey struct {
@@ -102,7 +107,7 @@ func (ctx *SignatureContext) sign(kp *SigKeyPair, msg []byte) Signature {
 			panic("could not schnorr-sign")
 		}
 	} else if ctx.SigType == 2 {
-		sig, err = bdn.Sign(ctx.pairingSuite, kp.Sk, msg)
+		sig, err = signBLS(ctx.pairingSuite, kp.Sk, kp.Pk, msg)
 		if err != nil && ctx.SigType == 2 {
 			panic("could not bls-sign")
 		}
@@ -124,15 +129,16 @@ func (ctx *SignatureContext) verify(pk *Pubkey, msg []byte, sig Signature) bool 
 			return false
 		}
 	} else if ctx.SigType == 2 { // Schnorr and bls signatures
-		err = bdn.Verify(ctx.pairingSuite, pk.kyber, msg, sig)
+		err = verifyBLS(ctx.pairingSuite, pk.kyber, msg, sig)
 		if err != nil {
 			return false
 		}
+
 	}
 	return true
 }
 
-func (ctx *SignatureContext) aggregateSign(kps []*SigKeyPair, negkps []*SigKeyPair, msg []byte) Signature {
+func (ctx *SignatureContext) diffSign(kps []*SigKeyPair, negkps []*SigKeyPair, diffPK *Pubkey, msg []byte) Signature {
 	var err error
 	var sig Signature
 
@@ -164,7 +170,7 @@ func (ctx *SignatureContext) aggregateSign(kps []*SigKeyPair, negkps []*SigKeyPa
 			}
 		}
 
-		sig, err = bdn.Sign(ctx.pairingSuite, aggregateSk, msg)
+		sig, err = signBLS(ctx.pairingSuite, aggregateSk, diffPK.kyber, msg)
 		if err != nil && ctx.SigType == 2 {
 			panic("could not bls-aggregate-sign")
 		}
@@ -175,7 +181,7 @@ func (ctx *SignatureContext) aggregateSign(kps []*SigKeyPair, negkps []*SigKeyPa
 	return sig
 }
 
-func (ctx *SignatureContext) getAggregatePubKeyFromKeyPairs(keys []*SigKeyPair, negKeys []*SigKeyPair, pk *Pubkey) {
+func (ctx *SignatureContext) getDiffPubKeyFromKeyPairs(keys []*SigKeyPair, negKeys []*SigKeyPair, pk *Pubkey) {
 	var aggregatePk kyber.Point
 	if ctx.SigType == 1 {
 		aggregatePk = keys[0].Pk.Clone()
@@ -201,7 +207,7 @@ func (ctx *SignatureContext) getAggregatePubKeyFromKeyPairs(keys []*SigKeyPair, 
 	pk.kyber = aggregatePk.Clone()
 }
 
-func (ctx *SignatureContext) getAggregatePubKey(keys []*Pubkey, negKeys []*Pubkey, pk *Pubkey) {
+func (ctx *SignatureContext) getDiffPubKey(keys []*Pubkey, negKeys []*Pubkey, pk *Pubkey) {
 	var aggregatePk kyber.Point
 	if ctx.SigType == 1 {
 		aggregatePk = keys[0].kyber.Clone()
@@ -227,10 +233,10 @@ func (ctx *SignatureContext) getAggregatePubKey(keys []*Pubkey, negKeys []*Pubke
 	pk.kyber = aggregatePk.Clone()
 }
 
-func (ctx *SignatureContext) aggregatePK(kps []*Pubkey, negKeys []*Pubkey) []byte {
+func (ctx *SignatureContext) diffPK(kps []*Pubkey, negKeys []*Pubkey) []byte {
 	var pk Pubkey
 	aggregatePkBytes := new(bytes.Buffer)
-	ctx.getAggregatePubKey(kps, negKeys, &pk)
+	ctx.getDiffPubKey(kps, negKeys, &pk)
 	size, _ := pk.kyber.MarshalTo(aggregatePkBytes)
 	if size != int(ctx.PkSize) {
 		log.Fatal("different pk sizes")
@@ -238,15 +244,60 @@ func (ctx *SignatureContext) aggregatePK(kps []*Pubkey, negKeys []*Pubkey) []byt
 	return aggregatePkBytes.Bytes()
 }
 
-func (ctx *SignatureContext) aggregatePKFromPairs(kps []*SigKeyPair, negKeys []*SigKeyPair) []byte {
+func (ctx *SignatureContext) diffPKFromPairs(kps []*SigKeyPair, negKeys []*SigKeyPair) []byte {
 	var pk Pubkey
 	aggregatePkBytes := new(bytes.Buffer)
-	ctx.getAggregatePubKeyFromKeyPairs(kps, negKeys, &pk)
+	ctx.getDiffPubKeyFromKeyPairs(kps, negKeys, &pk)
 	size, _ := pk.kyber.MarshalTo(aggregatePkBytes)
 	if size != int(ctx.PkSize) {
 		log.Fatal("different pk sizes")
 	}
 	return aggregatePkBytes.Bytes()
+}
+
+// aggregateSignatures This is modified to remove copying signature bytes (AggregateSignatures from dedis/kyber)
+func (ctx *SignatureContext) aggregateSignatures(sigs []Signature) Signature {
+	sig := ctx.pairingSuite.G1().Point()
+	for i := 0; i < len(sigs); i++ {
+		sigToAdd := ctx.pairingSuite.G1().Point()
+		if err := sigToAdd.UnmarshalBinary(sigs[i]); err != nil {
+			return nil
+		}
+		sig.Add(sig, sigToAdd)
+	}
+	sigByte, _ := sig.MarshalBinary()
+	return sigByte
+}
+
+// batchVerify This is modified to remove copying public key bytes (BatchVerify from dedis/kyber)
+func (ctx *SignatureContext) batchVerify(publics []*Pubkey, msg []byte, sig []byte) bool {
+	s := ctx.pairingSuite.G1().Point()
+	if err := s.UnmarshalBinary(sig); err != nil {
+		return false
+	}
+
+	var aggregatedLeft kyber.Point
+	for i := range publics {
+		hashable, ok := ctx.pairingSuite.G1().Point().(hashablePoint)
+		if !ok {
+			return false
+		}
+		pkBytes, _ := publics[i].kyber.MarshalBinary()
+		hm := hashable.Hash(append(msg, pkBytes...))
+		pair := ctx.pairingSuite.Pair(hm, publics[i].kyber)
+
+		if i == 0 {
+			aggregatedLeft = pair
+		} else {
+			aggregatedLeft.Add(aggregatedLeft, pair)
+		}
+	}
+
+	right := ctx.pairingSuite.Pair(s, ctx.pairingSuite.G2().Point().Base())
+	if !aggregatedLeft.Equal(right) {
+		return false
+	}
+	return true
 }
 
 func (ctx *SignatureContext) marshelKeys(kp *SigKeyPair, buf *bytes.Buffer) {
@@ -289,4 +340,42 @@ func (ctx *SignatureContext) unmarshelPublicKeysFromBytes(pk *Pubkey, pkBytes []
 		pk.kyber = keys.Pk.Base()
 		_, _ = pk.kyber.UnmarshalFrom(buf)
 	}
+}
+
+// BLSSign is an updated version of original dedis/kyber bls signing for pk-based message signing to avoid searching for duplicate msgs
+// because we already make sure that public keys are unique
+func signBLS(suite pairing.Suite, sk kyber.Scalar, pk kyber.Point, msg []byte) ([]byte, error) {
+	hashable, ok := suite.G1().Point().(hashablePoint)
+	if !ok {
+		return nil, errors.New("point needs to implement hashablePoint")
+	}
+	pkBytes, _ := pk.MarshalBinary()
+	HM := hashable.Hash(append(msg, pkBytes...))
+	xHM := HM.Mul(sk, HM)
+
+	s, err := xHM.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func verifyBLS(suite pairing.Suite, pk kyber.Point, msg, sig []byte) error {
+	hashable, ok := suite.G1().Point().(hashablePoint)
+	if !ok {
+		return errors.New("bls: point needs to implement hashablePoint")
+	}
+	var HM kyber.Point
+	pkBytes, _ := pk.MarshalBinary()
+	HM = hashable.Hash(append(msg, pkBytes...))
+	left := suite.Pair(HM, pk)
+	s := suite.G1().Point()
+	if err := s.UnmarshalBinary(sig); err != nil {
+		return err
+	}
+	right := suite.Pair(s, suite.G2().Point().Base())
+	if !left.Equal(right) {
+		return errors.New("bls: invalid signature")
+	}
+	return nil
 }
