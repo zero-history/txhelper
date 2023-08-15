@@ -198,7 +198,7 @@ func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 	}
 	for i := 0; i < len(data.Outputs); i++ {
 		buffer.Write(data.Outputs[i].Pk)
-		buffer.WriteByte(byte(data.Outputs[i].N))
+		buffer.WriteByte(data.Outputs[i].N)
 		buffer.Write(data.Outputs[i].Data)
 	}
 
@@ -739,6 +739,12 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 
 	txh.activityProof = ctx.computeAppActivity(data) // to compute header - must be after computeOutIdentifier
 
+	var bufs [][]byte
+	var pks []Pubkey
+	if ctx.sigContext.SigType == 2 {
+		bufs = make([][]byte, len(data.Outputs))
+		pks = make([]Pubkey, len(data.Outputs))
+	}
 	for i := 0; i < len(data.Inputs); i++ {
 		data.Inputs[i].u.UDelta = append(data.Inputs[i].u.UDelta, txh.activityProof...)
 		if int(data.Outputs[i].N) != len(data.Inputs[i].u.UDelta)/33 {
@@ -750,7 +756,7 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 		buf.Write(data.Outputs[i].Data)
 		buf.Write(data.Inputs[i].u.UDelta)
 
-		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+		if ctx.sigContext.SigType == 1 {
 			keybuffer.Write(data.Inputs[i].u.Keys)
 			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
 			if ctx.sigContext.verify(&pk, buf.Bytes(), txh.Kyber[i]) == false {
@@ -759,8 +765,16 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 			}
 			keybuffer.Reset()
 		}
+		if ctx.sigContext.SigType == 2 {
+			keybuffer.Write(data.Inputs[i].u.Keys)
+			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+			keybuffer.Reset()
+			bufs[i] = make([]byte, buf.Len())
+			copy(bufs[i], buf.Bytes())
+		}
 		buf.Reset()
 	}
+
 	for i := len(data.Inputs); i < len(data.Outputs); i++ {
 		data.Outputs[i].u.UDelta = make([]byte, 33)
 		copy(data.Outputs[i].u.UDelta, txh.activityProof)
@@ -769,10 +783,8 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 		buf.WriteByte(data.Outputs[i].N)
 		buf.Write(data.Outputs[i].Data)
 		buf.Write(data.Outputs[i].u.UDelta)
-		//buf.Write(data.Outputs[i].u.Wmark)
 
-		//fmt.Println("sig ", data.Outputs[i].u.id, buf.Bytes())
-		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+		if ctx.sigContext.SigType == 1 {
 			keybuffer.Write(data.Outputs[i].Pk)
 			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
 			if ctx.sigContext.verify(&pk, buf.Bytes(), txh.Kyber[i]) == false {
@@ -781,7 +793,21 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 			}
 			keybuffer.Reset()
 		}
+		if ctx.sigContext.SigType == 2 {
+			keybuffer.Write(data.Outputs[i].Pk)
+			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+			keybuffer.Reset()
+			bufs[i] = make([]byte, buf.Len())
+			copy(bufs[i], buf.Bytes())
+		}
 		buf.Reset()
+	}
+	if ctx.sigContext.SigType == 2 {
+		sig := ctx.sigContext.aggregateSignatures(txh.Kyber)
+		if !ctx.sigContext.batchVerifyMultipleMsg(pks, bufs, sig) {
+			err = "invalid aggregate sig"
+			return false, &err
+		}
 	}
 	return true, nil
 }

@@ -300,6 +300,37 @@ func (ctx *SignatureContext) batchVerify(publics []Pubkey, msg []byte, sig []byt
 	return true
 }
 
+// batchVerify This is modified to remove copying public key bytes (BatchVerify from dedis/kyber)
+func (ctx *SignatureContext) batchVerifyMultipleMsg(publics []Pubkey, msgs [][]byte, sig []byte) bool {
+	s := ctx.pairingSuite.G1().Point()
+	if err := s.UnmarshalBinary(sig); err != nil {
+		return false
+	}
+
+	var aggregatedLeft kyber.Point
+	for i := range publics {
+		hashable, ok := ctx.pairingSuite.G1().Point().(hashablePoint)
+		if !ok {
+			return false
+		}
+		pkBytes, _ := publics[i].kyber.MarshalBinary()
+		HM := hashable.Hash(append(msgs[i], pkBytes...))
+		pair := ctx.pairingSuite.Pair(HM, publics[i].kyber)
+
+		if i == 0 {
+			aggregatedLeft = pair
+		} else {
+			aggregatedLeft.Add(aggregatedLeft, pair)
+		}
+	}
+
+	right := ctx.pairingSuite.Pair(s, ctx.pairingSuite.G2().Point().Base())
+	if !aggregatedLeft.Equal(right) {
+		return false
+	}
+	return true
+}
+
 func (ctx *SignatureContext) marshelKeys(kp *SigKeyPair, buf *bytes.Buffer) {
 	if ctx.SigType == 1 || ctx.SigType == 2 { // Schnorr signature
 		_, _ = kp.Pk.MarshalTo(buf)
