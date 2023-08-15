@@ -3,9 +3,7 @@ package txhelper
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 	"testing"
-	"time"
 )
 
 func TestSig(tester *testing.T) {
@@ -116,13 +114,11 @@ func TestAggregateBLSSig(tester *testing.T) {
 		num := 5
 		keys := make([]SigKeyPair, num)
 		pks := make([]Pubkey, num)
-		pksP := make([]*Pubkey, num)
 		sigs := make([]Signature, num)
 
 		for i := 0; i < num; i++ {
 			sigCtx.generate(&keys[i])
 			pks[i] = sigCtx.getPubKey(&keys[i])
-			pksP[i] = &pks[i]
 			sigs[i] = sigCtx.sign(&keys[i], msg)
 			if !sigCtx.verify(&pks[i], msg, sigs[i]) {
 				tester.Fatal("invalid individual signature")
@@ -130,7 +126,7 @@ func TestAggregateBLSSig(tester *testing.T) {
 		}
 
 		aggregateSig := sigCtx.aggregateSignatures(sigs)
-		if !sigCtx.batchVerify(pksP, msg, aggregateSig) {
+		if !sigCtx.batchVerify(pks, msg, aggregateSig) {
 			tester.Fatal("invalid aggregate BLS signature")
 		}
 	}
@@ -168,41 +164,89 @@ func BenchmarkSignatureContext_VerifyBLS(b *testing.B) {
 	result = s
 }
 
-func BenchmarkSignatureContext_BatchVerify(tester *testing.B) {
+func BenchmarkSignatureContext_BatchVerify5(tester *testing.B) {
 	sigCtx := NewSigContext(2)
-	nums := []int{5, 10, 100}
-	for j := range nums {
-		msg := make([]byte, 32)
-		rand.Read(msg) // some msg, doesn't have to be purely random
-		keys := make([]SigKeyPair, nums[j])
-		pks := make([]Pubkey, nums[j])
-		pksP := make([]*Pubkey, nums[j])
-		sigs := make([]Signature, nums[j])
+	num := 5
+	msg := make([]byte, 32)
+	rand.Read(msg) // some msg, doesn't have to be purely random
+	keys := make([]SigKeyPair, num)
+	pks := make([]Pubkey, num)
+	sigs := make([]Signature, num)
 
-		for i := 0; i < nums[j]; i++ {
-			sigCtx.generate(&keys[i])
-			pks[i] = sigCtx.getPubKey(&keys[i])
-			pksP[i] = &pks[i]
-			sigs[i] = sigCtx.sign(&keys[i], msg)
-			if !sigCtx.verify(&pks[i], msg, sigs[i]) {
-				tester.Fatal("invalid individual signature")
-			}
-		}
-
-		var sigVerTime time.Duration
-
-		aggregateSig := sigCtx.aggregateSignatures(sigs)
-		var s bool
-		for i := 0; i < tester.N; i++ {
-			start := time.Now()
-			s = sigCtx.batchVerify(pksP, msg, aggregateSig) // todo add aggregated
-			sigVerTime += time.Since(start)
-		}
-		result = s
-		if !result {
-			tester.Fatal("invalid aggregate BLS signature")
-		} else {
-			fmt.Print("verification time per pk from (", nums[j], "):", sigVerTime/time.Duration(nums[j]*tester.N))
+	for i := 0; i < num; i++ {
+		sigCtx.generate(&keys[i])
+		pks[i] = sigCtx.getPubKey(&keys[i])
+		sigs[i] = sigCtx.sign(&keys[i], msg)
+		if !sigCtx.verify(&pks[i], msg, sigs[i]) {
+			tester.Fatal("invalid individual signature")
 		}
 	}
+
+	aggregateSig := sigCtx.aggregateSignatures(sigs)
+	var s bool
+	for i := 0; i < tester.N; i++ {
+		s = sigCtx.batchVerify(pks, msg, aggregateSig) // todo add aggregated
+	}
+	if !s {
+		tester.Fatal("invalid aggregate BLS signature")
+	}
+	result = s
+}
+
+func BenchmarkSignatureContext_BatchVerify50(tester *testing.B) {
+	sigCtx := NewSigContext(2)
+	num := 50
+	msg := make([]byte, 32)
+	rand.Read(msg) // some msg, doesn't have to be purely random
+	keys := make([]SigKeyPair, num)
+	pks := make([]Pubkey, num)
+	sigs := make([]Signature, num)
+
+	for i := 0; i < num; i++ {
+		sigCtx.generate(&keys[i])
+		pks[i] = sigCtx.getPubKey(&keys[i])
+		sigs[i] = sigCtx.sign(&keys[i], msg)
+		if !sigCtx.verify(&pks[i], msg, sigs[i]) {
+			tester.Fatal("invalid individual signature")
+		}
+	}
+
+	aggregateSig := sigCtx.aggregateSignatures(sigs)
+	var s bool
+	for i := 0; i < tester.N; i++ {
+		s = sigCtx.batchVerify(pks, msg, aggregateSig)
+	}
+	if !s {
+		tester.Fatal("invalid aggregate BLS signature")
+	}
+	result = s
+}
+
+func BenchmarkSignatureContext_BatchVerify500(tester *testing.B) {
+	sigCtx := NewSigContext(2)
+	num := 500
+	msg := make([]byte, 32)
+	rand.Read(msg) // some msg, doesn't have to be purely random
+	keys := make([]SigKeyPair, num)
+	pks := make([]Pubkey, num)
+	sigs := make([]Signature, num)
+
+	for i := 0; i < num; i++ {
+		sigCtx.generate(&keys[i])
+		pks[i] = sigCtx.getPubKey(&keys[i])
+		sigs[i] = sigCtx.sign(&keys[i], msg)
+		if !sigCtx.verify(&pks[i], msg, sigs[i]) {
+			tester.Fatal("invalid individual signature")
+		}
+	}
+
+	aggregateSig := sigCtx.aggregateSignatures(sigs)
+	var s bool
+	for i := 0; i < tester.N; i++ {
+		s = sigCtx.batchVerify(pks, msg, aggregateSig)
+	}
+	if !s {
+		tester.Fatal("invalid aggregate BLS signature")
+	}
+	result = s
 }

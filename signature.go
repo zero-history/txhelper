@@ -270,7 +270,7 @@ func (ctx *SignatureContext) aggregateSignatures(sigs []Signature) Signature {
 }
 
 // batchVerify This is modified to remove copying public key bytes (BatchVerify from dedis/kyber)
-func (ctx *SignatureContext) batchVerify(publics []*Pubkey, msg []byte, sig []byte) bool {
+func (ctx *SignatureContext) batchVerify(publics []Pubkey, msg []byte, sig []byte) bool {
 	s := ctx.pairingSuite.G1().Point()
 	if err := s.UnmarshalBinary(sig); err != nil {
 		return false
@@ -283,8 +283,8 @@ func (ctx *SignatureContext) batchVerify(publics []*Pubkey, msg []byte, sig []by
 			return false
 		}
 		pkBytes, _ := publics[i].kyber.MarshalBinary()
-		hm := hashable.Hash(append(msg, pkBytes...))
-		pair := ctx.pairingSuite.Pair(hm, publics[i].kyber)
+		HM := hashable.Hash(append(msg, pkBytes...))
+		pair := ctx.pairingSuite.Pair(HM, publics[i].kyber)
 
 		if i == 0 {
 			aggregatedLeft = pair

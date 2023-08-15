@@ -76,7 +76,7 @@ func (ctx *ExeContext) utxoClassicTxHeader(txh *TxHeader, data *AppData) {
 		buffer.Write(data.Outputs[i].Data)
 	}
 
-	if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+	if ctx.sigContext.SigType == 1 {
 		// if there are no inputs, all output owners must sign
 		if len(data.Inputs) == 0 {
 			txh.Kyber = make([]Signature, len(data.Outputs))
@@ -96,15 +96,37 @@ func (ctx *ExeContext) utxoClassicTxHeader(txh *TxHeader, data *AppData) {
 			}
 		}
 	}
+
+	if ctx.sigContext.SigType == 2 {
+		// if there are no inputs, all output owners must sign
+		var sigs []Signature
+		if len(data.Inputs) == 0 {
+			sigs = make([]Signature, len(data.Outputs))
+			for i := 0; i < len(data.Outputs); i++ {
+				keybuffer.Write(data.Outputs[i].u.Keys)
+				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+				keybuffer.Reset()
+			}
+		} else { // otherwise, only input owners sign
+			sigs = make([]Signature, len(data.Inputs))
+			for i := 0; i < len(data.Inputs); i++ {
+				keybuffer.Write(data.Inputs[i].u.Keys)
+				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+				keybuffer.Reset()
+			}
+		}
+		txh.Kyber = make([]Signature, 1)
+		txh.Kyber[0] = ctx.sigContext.aggregateSignatures(sigs)
+	}
 }
 
 func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buffer := new(bytes.Buffer)
 	keybuffer := new(bytes.Buffer)
 	var pk Pubkey
-	var keys SigKeyPair
 	var err string
-	ctx.sigContext.getPubKey(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -115,8 +137,8 @@ func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (
 		buffer.Write(data.Outputs[i].Data)
 	}
 
-	if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-		if len(data.Outputs) == 0 {
+	if ctx.sigContext.SigType == 1 {
+		if len(data.Inputs) == 0 {
 			for i := 0; i < len(data.Outputs); i++ {
 				keybuffer.Write(data.Outputs[i].Pk)
 				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
@@ -136,6 +158,29 @@ func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (
 				}
 				keybuffer.Reset()
 			}
+		}
+	}
+
+	if ctx.sigContext.SigType == 2 {
+		var pks []Pubkey
+		if len(data.Inputs) == 0 {
+			pks = make([]Pubkey, len(data.Outputs))
+			for i := 0; i < len(data.Outputs); i++ {
+				keybuffer.Write(data.Outputs[i].Pk)
+				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+				keybuffer.Reset()
+			}
+		} else {
+			pks = make([]Pubkey, len(data.Inputs))
+			for i := 0; i < len(data.Inputs); i++ {
+				keybuffer.Write(data.Inputs[i].u.Keys)
+				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+				keybuffer.Reset()
+			}
+		}
+		if !ctx.sigContext.batchVerify(pks, buffer.Bytes(), txh.Kyber[0]) {
+			err = "invalid aggregate sig"
+			return false, &err
 		}
 	}
 
@@ -157,7 +202,7 @@ func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 		buffer.Write(data.Outputs[i].Data)
 	}
 
-	if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+	if ctx.sigContext.SigType == 1 {
 		if len(data.Inputs) == 0 { // output owners must sign if there are no inputs
 			txh.Kyber = make([]Signature, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
@@ -175,6 +220,29 @@ func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 				keybuffer.Reset()
 			}
 		}
+	}
+
+	if ctx.sigContext.SigType == 2 {
+		var sigs []Signature
+		if len(data.Inputs) == 0 { // output owners must sign if there are no inputs
+			sigs = make([]Signature, len(data.Outputs))
+			for i := 0; i < len(data.Outputs); i++ {
+				keybuffer.Write(data.Outputs[i].u.Keys)
+				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+				keybuffer.Reset()
+			}
+		} else { // Otherwise, only input owners sign
+			sigs = make([]Signature, len(data.Inputs))
+			for i := 0; i < len(data.Inputs); i++ {
+				keybuffer.Write(data.Inputs[i].u.Keys)
+				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+				keybuffer.Reset()
+			}
+		}
+		txh.Kyber = make([]Signature, 1)
+		txh.Kyber[0] = ctx.sigContext.aggregateSignatures(sigs)
 	}
 }
 
@@ -195,7 +263,7 @@ func (ctx *ExeContext) verifyAccClassicTxHeader(txh *TxHeader, data *AppData) (b
 		buffer.Write(data.Outputs[i].Data)
 	}
 
-	if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+	if ctx.sigContext.SigType == 1 {
 		if len(data.Inputs) == 0 {
 			for i := 0; i < len(data.Outputs); i++ {
 				keybuffer.Write(data.Outputs[i].Pk)
@@ -219,6 +287,29 @@ func (ctx *ExeContext) verifyAccClassicTxHeader(txh *TxHeader, data *AppData) (b
 			}
 		}
 	}
+	if ctx.sigContext.SigType == 2 {
+		var pks []Pubkey
+		if len(data.Inputs) == 0 {
+			pks = make([]Pubkey, len(data.Outputs))
+			for i := 0; i < len(data.Outputs); i++ {
+				keybuffer.Write(data.Outputs[i].Pk)
+				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+				keybuffer.Reset()
+			}
+
+		} else {
+			pks = make([]Pubkey, len(data.Inputs))
+			for i := 0; i < len(data.Inputs); i++ {
+				keybuffer.Write(data.Inputs[i].u.Keys)
+				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+				keybuffer.Reset()
+			}
+		}
+		if !ctx.sigContext.batchVerify(pks, buffer.Bytes(), txh.Kyber[0]) {
+			err = "invalid aggregate sig"
+			return false, &err
+		}
+	}
 	return true, nil
 }
 
@@ -238,12 +329,23 @@ func (ctx *ExeContext) utxoAccountableClassicTxHeader(txh *TxHeader, data *AppDa
 		buffer.Write(data.Outputs[i].Data)
 	}
 
-	txh.Kyber = make([]Signature, len(data.Inputs))
+	var sigs []Signature
+	if ctx.sigContext.SigType == 1 {
+		txh.Kyber = make([]Signature, len(data.Inputs))
+	}
+	if ctx.sigContext.SigType == 2 {
+		sigs = make([]Signature, len(data.Inputs))
+	}
 	for i := 0; i < len(data.Inputs); i++ {
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
 			keybuffer.Write(data.Inputs[i].u.Keys)
 			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
-			txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+			if ctx.sigContext.SigType == 1 {
+				txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+			}
+			if ctx.sigContext.SigType == 2 {
+				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+			}
 			keybuffer.Reset()
 		}
 	}
@@ -262,9 +364,18 @@ func (ctx *ExeContext) utxoAccountableClassicTxHeader(txh *TxHeader, data *AppDa
 				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
 				sig = ctx.sigContext.sign(&keys, buffer.Bytes())
 				keybuffer.Reset()
-				txh.Kyber = append(txh.Kyber, sig)
+				if ctx.sigContext.SigType == 1 {
+					txh.Kyber = append(txh.Kyber, sig)
+				}
+				if ctx.sigContext.SigType == 2 {
+					sigs = append(sigs, sig)
+				}
 			}
 		}
+	}
+	if ctx.sigContext.SigType == 2 {
+		txh.Kyber = make([]Signature, 1)
+		txh.Kyber[0] = ctx.sigContext.aggregateSignatures(sigs)
 	}
 }
 
@@ -285,13 +396,23 @@ func (ctx *ExeContext) verifyUtxoAccountableClassicTxHeader(txh *TxHeader, data 
 		buffer.Write(data.Outputs[i].Data)
 	}
 
+	var pks []Pubkey
+	if ctx.sigContext.SigType == 2 {
+		pks = make([]Pubkey, len(data.Inputs))
+	}
+
 	for i := 0; i < len(data.Inputs); i++ {
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
 			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
-			if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
-				err = "invalid sig"
-				return false, &err
+			if ctx.sigContext.SigType == 1 {
+				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
+					err = "invalid sig"
+					return false, &err
+				}
+			}
+			if ctx.sigContext.SigType == 2 {
+				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
 			}
 			keybuffer.Reset()
 		}
@@ -308,14 +429,26 @@ func (ctx *ExeContext) verifyUtxoAccountableClassicTxHeader(txh *TxHeader, data 
 			}
 			if !found {
 				keybuffer.Write(data.Outputs[i].Pk)
-				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
-				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[j+len(data.Inputs)]) == false {
-					err = "invalid sig"
-					return false, &err
+				if ctx.sigContext.SigType == 1 {
+					ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+					if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[j+len(data.Inputs)]) == false {
+						err = "invalid sig"
+						return false, &err
+					}
+				}
+				if ctx.sigContext.SigType == 2 {
+					ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+					pks = append(pks, pk)
 				}
 				keybuffer.Reset()
 				j++
 			}
+		}
+	}
+	if ctx.sigContext.SigType == 2 {
+		if !ctx.sigContext.batchVerify(pks, buffer.Bytes(), txh.Kyber[0]) {
+			err = "invalid aggregate sig"
+			return false, &err
 		}
 	}
 	return true, nil
@@ -336,22 +469,46 @@ func (ctx *ExeContext) accAccountableClassicTxHeader(txh *TxHeader, data *AppDat
 		buffer.Write(data.Outputs[i].Data)
 	}
 
-	txh.Kyber = make([]Signature, len(data.Outputs))
+	var sigs []Signature
+	if ctx.sigContext.SigType == 1 {
+		txh.Kyber = make([]Signature, len(data.Outputs))
+	}
+	if ctx.sigContext.SigType == 2 {
+		sigs = make([]Signature, len(data.Outputs))
+	}
+
 	for i := 0; i < len(data.Inputs); i++ {
-		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+		if ctx.sigContext.SigType == 1 {
 			keybuffer.Write(data.Inputs[i].u.Keys)
 			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
 			txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
 			keybuffer.Reset()
 		}
+		if ctx.sigContext.SigType == 2 {
+			keybuffer.Write(data.Inputs[i].u.Keys)
+			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+			keybuffer.Reset()
+		}
 	}
 	for i := len(data.Inputs); i < len(data.Outputs); i++ {
-		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+		if ctx.sigContext.SigType == 1 {
 			keybuffer.Write(data.Outputs[i].u.Keys)
 			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
 			txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
 			keybuffer.Reset()
 		}
+		if ctx.sigContext.SigType == 2 {
+			keybuffer.Write(data.Outputs[i].u.Keys)
+			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
+			keybuffer.Reset()
+		}
+	}
+
+	if ctx.sigContext.SigType == 2 {
+		txh.Kyber = make([]Signature, 1)
+		txh.Kyber[0] = ctx.sigContext.aggregateSignatures(sigs)
 	}
 }
 
@@ -372,8 +529,12 @@ func (ctx *ExeContext) verifyAccAccountableClassicTxHeader(txh *TxHeader, data *
 		buffer.Write(data.Outputs[i].Data)
 	}
 
+	var pks []Pubkey
+	if ctx.sigContext.SigType == 2 {
+		pks = make([]Pubkey, len(data.Outputs))
+	}
 	for i := 0; i < len(data.Inputs); i++ {
-		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+		if ctx.sigContext.SigType == 1 {
 			keybuffer.Write(data.Inputs[i].u.Keys)
 			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
 			if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
@@ -382,9 +543,14 @@ func (ctx *ExeContext) verifyAccAccountableClassicTxHeader(txh *TxHeader, data *
 			}
 			keybuffer.Reset()
 		}
+		if ctx.sigContext.SigType == 2 {
+			keybuffer.Write(data.Inputs[i].u.Keys)
+			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+			keybuffer.Reset()
+		}
 	}
 	for i := len(data.Inputs); i < len(data.Outputs); i++ {
-		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+		if ctx.sigContext.SigType == 1 {
 			keybuffer.Write(data.Outputs[i].Pk)
 			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
 			if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
@@ -392,6 +558,17 @@ func (ctx *ExeContext) verifyAccAccountableClassicTxHeader(txh *TxHeader, data *
 				return false, &err
 			}
 			keybuffer.Reset()
+		}
+		if ctx.sigContext.SigType == 2 {
+			keybuffer.Write(data.Outputs[i].Pk)
+			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+			keybuffer.Reset()
+		}
+	}
+	if ctx.sigContext.SigType == 2 {
+		if !ctx.sigContext.batchVerify(pks, buffer.Bytes(), txh.Kyber[0]) {
+			err = "invalid aggregate sig"
+			return false, &err
 		}
 	}
 	return true, nil

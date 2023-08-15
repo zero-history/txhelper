@@ -21,13 +21,13 @@ func (ctx *ExeContext) testClientTransactions(num int, tester *testing.T) {
 
 		val, err := ctx.VerifyIncomingTransaction(tx)
 		if !val {
-			tester.Fatal("invalid transaction creation:" + *err)
+			tester.Fatal("invalid transaction creation:"+*err, ctx.txModel)
 		}
 
 		ctx.PrepareAppDataClient(&tx1.Data)
 		val, err = ctx.VerifyIncomingTransaction(&tx1)
 		if !val {
-			tester.Fatal("invalid transaction convertion:" + *err)
+			tester.Fatal("invalid transaction convertion:"+*err, ctx.txModel)
 		}
 
 		ctx.UpdateAppDataClient(&tx.Data)
@@ -81,14 +81,14 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 
 		val, err := ctxClient.VerifyIncomingTransaction(tx)
 		if !val {
-			tester.Fatal("invalid transaction convertion in the client:" + *err)
+			tester.Fatal("invalid transaction convertion in the client:"+*err, ctx.txModel)
 		}
 
 		ctxClient.UpdateAppDataClient(&tx.Data)
 
 		val, err = ctxPeer.VerifyIncomingTransaction(&tx1)
 		if !val {
-			tester.Fatal("invalid transaction convertion in the peer:" + *err)
+			tester.Fatal("invalid transaction convertion in the peer:"+*err, ctx.txModel)
 		}
 
 		ctxPeer.UpdateAppDataPeer(i, &tx1)
@@ -143,13 +143,12 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 	var tx *Transaction
 	var tx1 Transaction
 
-	averageInSize := 0
-	averageOutSize := 0
-	averageTxSize := 0
-	averageTxVerTime := time.Duration(0)
-	averageUpdateTime := time.Duration(0)
-
 	for txType := 1; txType <= 6; txType++ {
+		averageInSize := 0
+		averageOutSize := 0
+		averageTxSize := 0
+		averageTxVerTime := time.Duration(0)
+		averageUpdateTime := time.Duration(0)
 		rand.NewSource(0)
 
 		ctxClient := NewContext(100+txType, 1, txType, sigType, 32, totalUsers, 4, 5, 1)
