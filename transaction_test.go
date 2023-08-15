@@ -21,7 +21,7 @@ func (ctx *ExeContext) testClientTransactions(num int, tester *testing.T) {
 
 		val, err := ctx.VerifyIncomingTransaction(tx)
 		if !val {
-			tester.Fatal("invalid transaction creation:"+*err, ctx.txModel)
+			tester.Fatal("invalid transaction creation:"+*err, ctx.txModel, ctx.sigContext)
 		}
 
 		ctx.PrepareAppDataClient(&tx1.Data)

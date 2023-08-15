@@ -49,7 +49,7 @@ type SignatureContext struct {
 	SigSize      int32
 }
 
-// New assign ctx objects
+// NewSigContext assigns ctx objects
 // 1 - Schnorr
 // 2 - BLS
 func NewSigContext(sigType int32) *SignatureContext {
@@ -332,16 +332,24 @@ func (ctx *SignatureContext) batchVerifyMultipleMsg(publics []Pubkey, msgs [][]b
 }
 
 func (ctx *SignatureContext) marshelKeys(kp *SigKeyPair, buf *bytes.Buffer) {
-	if ctx.SigType == 1 || ctx.SigType == 2 { // Schnorr signature
+	if ctx.SigType == 1 || ctx.SigType == 2 {
 		_, _ = kp.Pk.MarshalTo(buf)
 		_, _ = kp.Sk.MarshalTo(buf)
 	}
 }
 
-func (ctx *SignatureContext) unmarshelKeys(kp *SigKeyPair, buf *bytes.Buffer) {
-	if ctx.SigType == 1 || ctx.SigType == 2 { // Schnorr signature
-		_, _ = kp.Pk.UnmarshalFrom(buf)
-		_, _ = kp.Sk.UnmarshalFrom(buf)
+func (ctx *SignatureContext) unmarshelKeys(kp *SigKeyPair, buf []byte) {
+	if ctx.SigType == 1 {
+		kp.Pk = ctx.suite.Point().Base()
+		kp.Sk = ctx.suite.Scalar()
+		_ = kp.Pk.UnmarshalBinary(buf[:ctx.PkSize])
+		_ = kp.Sk.UnmarshalBinary(buf[ctx.PkSize:])
+	}
+	if ctx.SigType == 2 {
+		kp.Pk = ctx.pairingSuite.G2().Point().Base()
+		kp.Sk = ctx.pairingSuite.G2().Scalar()
+		_ = kp.Pk.UnmarshalBinary(buf[:ctx.PkSize])
+		_ = kp.Sk.UnmarshalBinary(buf[ctx.PkSize:])
 	}
 }
 
@@ -349,27 +357,29 @@ func (ctx *SignatureContext) marshelPublicKey(kp *SigKeyPair, buf *bytes.Buffer)
 	if buf.Len() != int(ctx.PkSize) {
 		log.Fatal("invalid pk size")
 	}
-	if ctx.SigType == 1 || ctx.SigType == 2 { // Schnorr signature
+	if ctx.SigType == 1 || ctx.SigType == 2 {
 		_, _ = kp.Pk.MarshalTo(buf)
 	}
 }
 
 func (ctx *SignatureContext) unmarshelPublicKeys(pk *Pubkey, buf *bytes.Buffer) {
-	if ctx.SigType == 1 || ctx.SigType == 2 { // Schnorr signature
-		var keys SigKeyPair
-		ctx.generate(&keys) // for initiating
-		pk.kyber = keys.Pk.Base()
+	if ctx.SigType == 1 {
+		pk.kyber = ctx.suite.Point().Base()
+		_, _ = pk.kyber.UnmarshalFrom(buf)
+	}
+	if ctx.SigType == 2 {
+		pk.kyber = ctx.pairingSuite.G2().Point().Base()
 		_, _ = pk.kyber.UnmarshalFrom(buf)
 	}
 }
 func (ctx *SignatureContext) unmarshelPublicKeysFromBytes(pk *Pubkey, pkBytes []byte) {
-	buf := new(bytes.Buffer)
-	buf.Write(pkBytes)
-	if ctx.SigType == 1 || ctx.SigType == 2 { // Schnorr signature
-		var keys SigKeyPair
-		ctx.generate(&keys) // for initiating
-		pk.kyber = keys.Pk.Base()
-		_, _ = pk.kyber.UnmarshalFrom(buf)
+	if ctx.SigType == 1 {
+		pk.kyber = ctx.suite.Point().Base()
+		_ = pk.kyber.UnmarshalBinary(pkBytes)
+	}
+	if ctx.SigType == 2 {
+		pk.kyber = ctx.pairingSuite.G2().Point().Base()
+		_ = pk.kyber.UnmarshalBinary(pkBytes)
 	}
 }
 

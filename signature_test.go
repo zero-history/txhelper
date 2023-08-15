@@ -25,7 +25,7 @@ func TestSig(tester *testing.T) {
 			}
 
 			sigCtx.marshelKeys(&keys, &kp1)
-			sigCtx.unmarshelKeys(&keys1, &kp1)
+			sigCtx.unmarshelKeys(&keys1, kp1.Bytes())
 			sigCtx.marshelKeys(&keys1, &kp2)
 
 			if !keys1.Pk.Equal(keys.Pk) {

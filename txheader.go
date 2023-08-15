@@ -63,9 +63,7 @@ func (ctx *ExeContext) VerifyTxHeader(txh *TxHeader, data *AppData) (bool, *stri
 
 func (ctx *ExeContext) utxoClassicTxHeader(txh *TxHeader, data *AppData) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var keys SigKeyPair
-	ctx.sigContext.generate(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -81,18 +79,14 @@ func (ctx *ExeContext) utxoClassicTxHeader(txh *TxHeader, data *AppData) {
 		if len(data.Inputs) == 0 {
 			txh.Kyber = make([]Signature, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 				txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		} else { // otherwise, only input owners sign
 			txh.Kyber = make([]Signature, len(data.Inputs))
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 				txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		}
 	}
@@ -103,18 +97,14 @@ func (ctx *ExeContext) utxoClassicTxHeader(txh *TxHeader, data *AppData) {
 		if len(data.Inputs) == 0 {
 			sigs = make([]Signature, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		} else { // otherwise, only input owners sign
 			sigs = make([]Signature, len(data.Inputs))
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		}
 		txh.Kyber = make([]Signature, 1)
@@ -124,7 +114,6 @@ func (ctx *ExeContext) utxoClassicTxHeader(txh *TxHeader, data *AppData) {
 
 func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var pk Pubkey
 	var err string
 
@@ -140,23 +129,19 @@ func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (
 	if ctx.sigContext.SigType == 1 {
 		if len(data.Inputs) == 0 {
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].Pk)
-				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Outputs[i].Pk)
 				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 					err = "invalid sig"
 					return false, &err
 				}
-				keybuffer.Reset()
 			}
 		} else {
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 					err = "invalid sig"
 					return false, &err
 				}
-				keybuffer.Reset()
 			}
 		}
 	}
@@ -166,16 +151,12 @@ func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (
 		if len(data.Inputs) == 0 {
 			pks = make([]Pubkey, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].Pk)
-				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-				keybuffer.Reset()
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Outputs[i].Pk)
 			}
 		} else {
 			pks = make([]Pubkey, len(data.Inputs))
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-				keybuffer.Reset()
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Inputs[i].u.Keys)
 			}
 		}
 		if !ctx.sigContext.batchVerify(pks, buffer.Bytes(), txh.Kyber[0]) {
@@ -189,9 +170,7 @@ func (ctx *ExeContext) verifyUtxoClassicTxHeader(txh *TxHeader, data *AppData) (
 
 func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var keys SigKeyPair
-	ctx.sigContext.generate(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -206,18 +185,14 @@ func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 		if len(data.Inputs) == 0 { // output owners must sign if there are no inputs
 			txh.Kyber = make([]Signature, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 				txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		} else { // Otherwise, only input owners sign
 			txh.Kyber = make([]Signature, len(data.Inputs))
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 				txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		}
 	}
@@ -227,18 +202,14 @@ func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 		if len(data.Inputs) == 0 { // output owners must sign if there are no inputs
 			sigs = make([]Signature, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		} else { // Otherwise, only input owners sign
 			sigs = make([]Signature, len(data.Inputs))
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 			}
 		}
 		txh.Kyber = make([]Signature, 1)
@@ -248,11 +219,8 @@ func (ctx *ExeContext) accClassicTxHeader(txh *TxHeader, data *AppData) {
 
 func (ctx *ExeContext) verifyAccClassicTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var pk Pubkey
-	var keys SigKeyPair
 	var err string
-	ctx.sigContext.getPubKey(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -266,24 +234,20 @@ func (ctx *ExeContext) verifyAccClassicTxHeader(txh *TxHeader, data *AppData) (b
 	if ctx.sigContext.SigType == 1 {
 		if len(data.Inputs) == 0 {
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].Pk)
-				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Outputs[i].Pk)
 				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 					err = "invalid sig"
 					return false, &err
 				}
-				keybuffer.Reset()
 			}
 
 		} else {
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 					err = "invalid sig"
 					return false, &err
 				}
-				keybuffer.Reset()
 			}
 		}
 	}
@@ -292,17 +256,13 @@ func (ctx *ExeContext) verifyAccClassicTxHeader(txh *TxHeader, data *AppData) (b
 		if len(data.Inputs) == 0 {
 			pks = make([]Pubkey, len(data.Outputs))
 			for i := 0; i < len(data.Outputs); i++ {
-				keybuffer.Write(data.Outputs[i].Pk)
-				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-				keybuffer.Reset()
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Outputs[i].Pk)
 			}
 
 		} else {
 			pks = make([]Pubkey, len(data.Inputs))
 			for i := 0; i < len(data.Inputs); i++ {
-				keybuffer.Write(data.Inputs[i].u.Keys)
-				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-				keybuffer.Reset()
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 			}
 		}
 		if !ctx.sigContext.batchVerify(pks, buffer.Bytes(), txh.Kyber[0]) {
@@ -315,10 +275,8 @@ func (ctx *ExeContext) verifyAccClassicTxHeader(txh *TxHeader, data *AppData) (b
 
 func (ctx *ExeContext) utxoAccountableClassicTxHeader(txh *TxHeader, data *AppData) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var keys SigKeyPair
 	var sig Signature
-	ctx.sigContext.generate(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -338,15 +296,13 @@ func (ctx *ExeContext) utxoAccountableClassicTxHeader(txh *TxHeader, data *AppDa
 	}
 	for i := 0; i < len(data.Inputs); i++ {
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 			if ctx.sigContext.SigType == 1 {
 				txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
 			}
 			if ctx.sigContext.SigType == 2 {
 				sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
 			}
-			keybuffer.Reset()
 		}
 	}
 	for i := 0; i < len(data.Outputs); i++ {
@@ -360,10 +316,8 @@ func (ctx *ExeContext) utxoAccountableClassicTxHeader(txh *TxHeader, data *AppDa
 				}
 			}
 			if !found {
-				keybuffer.Write(data.Outputs[i].u.Keys)
-				ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+				ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 				sig = ctx.sigContext.sign(&keys, buffer.Bytes())
-				keybuffer.Reset()
 				if ctx.sigContext.SigType == 1 {
 					txh.Kyber = append(txh.Kyber, sig)
 				}
@@ -381,11 +335,8 @@ func (ctx *ExeContext) utxoAccountableClassicTxHeader(txh *TxHeader, data *AppDa
 
 func (ctx *ExeContext) verifyUtxoAccountableClassicTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var pk Pubkey
-	var keys SigKeyPair
 	var err string
-	ctx.sigContext.getPubKey(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -403,18 +354,16 @@ func (ctx *ExeContext) verifyUtxoAccountableClassicTxHeader(txh *TxHeader, data 
 
 	for i := 0; i < len(data.Inputs); i++ {
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
 			if ctx.sigContext.SigType == 1 {
-				ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 				if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 					err = "invalid sig"
 					return false, &err
 				}
 			}
 			if ctx.sigContext.SigType == 2 {
-				ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
+				ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 			}
-			keybuffer.Reset()
 		}
 	}
 	j := 0
@@ -428,19 +377,17 @@ func (ctx *ExeContext) verifyUtxoAccountableClassicTxHeader(txh *TxHeader, data 
 				}
 			}
 			if !found {
-				keybuffer.Write(data.Outputs[i].Pk)
 				if ctx.sigContext.SigType == 1 {
-					ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+					ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Outputs[i].Pk)
 					if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[j+len(data.Inputs)]) == false {
 						err = "invalid sig"
 						return false, &err
 					}
 				}
 				if ctx.sigContext.SigType == 2 {
-					ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+					ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Outputs[i].Pk)
 					pks = append(pks, pk)
 				}
-				keybuffer.Reset()
 				j++
 			}
 		}
@@ -456,9 +403,7 @@ func (ctx *ExeContext) verifyUtxoAccountableClassicTxHeader(txh *TxHeader, data 
 
 func (ctx *ExeContext) accAccountableClassicTxHeader(txh *TxHeader, data *AppData) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var keys SigKeyPair
-	ctx.sigContext.generate(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -479,30 +424,22 @@ func (ctx *ExeContext) accAccountableClassicTxHeader(txh *TxHeader, data *AppDat
 
 	for i := 0; i < len(data.Inputs); i++ {
 		if ctx.sigContext.SigType == 1 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 			txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-			keybuffer.Reset()
 		}
 		if ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 			sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-			keybuffer.Reset()
 		}
 	}
 	for i := len(data.Inputs); i < len(data.Outputs); i++ {
 		if ctx.sigContext.SigType == 1 {
-			keybuffer.Write(data.Outputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 			txh.Kyber[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-			keybuffer.Reset()
 		}
 		if ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Outputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 			sigs[i] = ctx.sigContext.sign(&keys, buffer.Bytes())
-			keybuffer.Reset()
 		}
 	}
 
@@ -514,11 +451,8 @@ func (ctx *ExeContext) accAccountableClassicTxHeader(txh *TxHeader, data *AppDat
 
 func (ctx *ExeContext) verifyAccAccountableClassicTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var pk Pubkey
-	var keys SigKeyPair
 	var err string
-	ctx.sigContext.getPubKey(&keys) // initiating parameters
 
 	for i := 0; i < len(data.Inputs); i++ {
 		buffer.Write(data.Inputs[i].Header)
@@ -535,34 +469,26 @@ func (ctx *ExeContext) verifyAccAccountableClassicTxHeader(txh *TxHeader, data *
 	}
 	for i := 0; i < len(data.Inputs); i++ {
 		if ctx.sigContext.SigType == 1 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 			if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 				err = "invalid sig"
 				return false, &err
 			}
-			keybuffer.Reset()
 		}
 		if ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-			keybuffer.Reset()
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 		}
 	}
 	for i := len(data.Inputs); i < len(data.Outputs); i++ {
 		if ctx.sigContext.SigType == 1 {
-			keybuffer.Write(data.Outputs[i].Pk)
-			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Outputs[i].Pk)
 			if ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[i]) == false {
 				err = "invalid sig"
 				return false, &err
 			}
-			keybuffer.Reset()
 		}
 		if ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Outputs[i].Pk)
-			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-			keybuffer.Reset()
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Outputs[i].Pk)
 		}
 	}
 	if ctx.sigContext.SigType == 2 {
@@ -576,7 +502,6 @@ func (ctx *ExeContext) verifyAccAccountableClassicTxHeader(txh *TxHeader, data *
 
 func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 
 	negkeysP := make([]*SigKeyPair, len(data.Inputs))
 	keysP := make([]*SigKeyPair, len(data.Outputs))
@@ -585,18 +510,12 @@ func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 
 	// create keys
 	for i := 0; i < len(data.Inputs); i++ {
-		keybuffer.Write(data.Inputs[i].u.Keys)
-		ctx.sigContext.generate(&negkeys[i])
-		ctx.sigContext.unmarshelKeys(&negkeys[i], keybuffer)
-		keybuffer.Reset()
+		ctx.sigContext.unmarshelKeys(&negkeys[i], data.Inputs[i].u.Keys)
 		negkeysP[i] = &negkeys[i]
 	}
 	// compute header
 	for i := 0; i < len(data.Outputs); i++ {
-		keybuffer.Write(data.Outputs[i].u.Keys)
-		ctx.sigContext.generate(&pluskeys[i])
-		ctx.sigContext.unmarshelKeys(&pluskeys[i], keybuffer)
-		keybuffer.Reset()
+		ctx.sigContext.unmarshelKeys(&pluskeys[i], data.Outputs[i].u.Keys)
 		keysP[i] = &pluskeys[i]
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
@@ -609,13 +528,8 @@ func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 		log.Fatal("error in activities")
 	}
 
-	keybuffer.Reset()
-	keybuffer.Write(txh.excessPK)
 	var pk Pubkey
-	var keys SigKeyPair
-	ctx.sigContext.generate(&keys)
-	pk = ctx.sigContext.getPubKey(&keys)
-	ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+	ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, txh.excessPK)
 
 	buffer.Write(txh.activityProof)
 	buffer.Write(txh.excessPK)
@@ -624,9 +538,6 @@ func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 
 func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buffer := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
-	var keys SigKeyPair
-	ctx.sigContext.generate(&keys)
 
 	negkeysP := make([]*Pubkey, len(data.Inputs))
 	keysP := make([]*Pubkey, len(data.Outputs))
@@ -635,18 +546,12 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 
 	// create keys
 	for i := 0; i < len(data.Inputs); i++ {
-		keybuffer.Write(data.Inputs[i].u.Keys)
-		negkeys[i] = ctx.sigContext.getPubKey(&keys)
-		ctx.sigContext.unmarshelPublicKeys(&negkeys[i], keybuffer)
-		keybuffer.Reset()
+		ctx.sigContext.unmarshelPublicKeysFromBytes(&negkeys[i], data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 		negkeysP[i] = &negkeys[i]
 	}
 	// compute header
 	for i := 0; i < len(data.Outputs); i++ {
-		keybuffer.Write(data.Outputs[i].Pk)
-		pluskeys[i] = ctx.sigContext.getPubKey(&keys)
-		ctx.sigContext.unmarshelPublicKeys(&pluskeys[i], keybuffer)
-		keybuffer.Reset()
+		ctx.sigContext.unmarshelPublicKeysFromBytes(&pluskeys[i], data.Outputs[i].Pk)
 		keysP[i] = &pluskeys[i]
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
@@ -656,11 +561,8 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 	buffer.Write(txh.activityProof)
 	buffer.Write(txh.excessPK)
 
-	keybuffer.Reset()
-	keybuffer.Write(txh.excessPK)
 	var pk Pubkey
-	pk = ctx.sigContext.getPubKey(&keys)
-	ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+	ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, txh.excessPK)
 	if !ctx.sigContext.verify(&pk, buffer.Bytes(), txh.Kyber[0]) {
 		err := "invalid sig"
 		return false, &err
@@ -671,9 +573,7 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 
 func (ctx *ExeContext) accOrigamiTxHeader(txh *TxHeader, data *AppData) {
 	buf := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var keys SigKeyPair
-	ctx.sigContext.generate(&keys) // initiating parameters
 
 	// compute header
 	for i := 0; i < len(data.Outputs); i++ {
@@ -697,10 +597,8 @@ func (ctx *ExeContext) accOrigamiTxHeader(txh *TxHeader, data *AppData) {
 		//buf.Write(data.Inputs[i].u.Wmark)
 
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Inputs[i].u.Keys)
 			txh.Kyber[i] = ctx.sigContext.sign(&keys, buf.Bytes())
-			keybuffer.Reset()
 		}
 		buf.Reset()
 	}
@@ -715,10 +613,8 @@ func (ctx *ExeContext) accOrigamiTxHeader(txh *TxHeader, data *AppData) {
 		//buf.Write(data.Outputs[i].u.Wmark)
 
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Outputs[i].u.Keys)
-			ctx.sigContext.unmarshelKeys(&keys, keybuffer)
+			ctx.sigContext.unmarshelKeys(&keys, data.Outputs[i].u.Keys)
 			txh.Kyber[i] = ctx.sigContext.sign(&keys, buf.Bytes())
-			keybuffer.Reset()
 		}
 		buf.Reset()
 	}
@@ -726,11 +622,8 @@ func (ctx *ExeContext) accOrigamiTxHeader(txh *TxHeader, data *AppData) {
 
 func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (bool, *string) {
 	buf := new(bytes.Buffer)
-	keybuffer := new(bytes.Buffer)
 	var pk Pubkey
-	var keys SigKeyPair
 	var err string
-	ctx.sigContext.getPubKey(&keys) // initiating parameters
 
 	// compute header
 	for i := 0; i < len(data.Outputs); i++ {
@@ -757,18 +650,14 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 		buf.Write(data.Inputs[i].u.UDelta)
 
 		if ctx.sigContext.SigType == 1 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 			if ctx.sigContext.verify(&pk, buf.Bytes(), txh.Kyber[i]) == false {
 				err = "invalid sig"
 				return false, &err
 			}
-			keybuffer.Reset()
 		}
 		if ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Inputs[i].u.Keys)
-			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-			keybuffer.Reset()
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
 			bufs[i] = make([]byte, buf.Len())
 			copy(bufs[i], buf.Bytes())
 		}
@@ -785,18 +674,14 @@ func (ctx *ExeContext) verifyAccOrigamiTxHeader(txh *TxHeader, data *AppData) (b
 		buf.Write(data.Outputs[i].u.UDelta)
 
 		if ctx.sigContext.SigType == 1 {
-			keybuffer.Write(data.Outputs[i].Pk)
-			ctx.sigContext.unmarshelPublicKeys(&pk, keybuffer)
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, data.Outputs[i].Pk)
 			if ctx.sigContext.verify(&pk, buf.Bytes(), txh.Kyber[i]) == false {
 				err = "invalid sig"
 				return false, &err
 			}
-			keybuffer.Reset()
 		}
 		if ctx.sigContext.SigType == 2 {
-			keybuffer.Write(data.Outputs[i].Pk)
-			ctx.sigContext.unmarshelPublicKeys(&pks[i], keybuffer)
-			keybuffer.Reset()
+			ctx.sigContext.unmarshelPublicKeysFromBytes(&pks[i], data.Outputs[i].Pk)
 			bufs[i] = make([]byte, buf.Len())
 			copy(bufs[i], buf.Bytes())
 		}
