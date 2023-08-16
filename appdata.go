@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/crypto/sha3"
 	"log"
@@ -62,13 +63,15 @@ func (ctx *ExeContext) RandomAppData(data *AppData, inSize uint8, outSize uint8,
 }
 
 // PrepareAppDataClient get user details for inputs using the header
-func (ctx *ExeContext) PrepareAppDataClient(data *AppData) {
+func (ctx *ExeContext) PrepareAppDataClient(data *AppData) (bool, error) {
 	i := 0
 
 	// arrange inputs
 	for i = 0; i < len(data.Inputs); i++ {
-		if ctx.getClientOutFromH(data.Inputs[i].Header, &data.Inputs[i].u) == false {
+		ok, err := ctx.getClientOutFromH(data.Inputs[i].Header, &data.Inputs[i].u)
+		if !ok {
 			fmt.Println("could not find h:", data.Inputs[i].Header)
+			return false, err
 		}
 
 		// copy public key
@@ -82,27 +85,24 @@ func (ctx *ExeContext) PrepareAppDataClient(data *AppData) {
 		//update client db with new data
 		data.Outputs[i].u.H = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
+	return true, nil
 }
 
 // PrepareAppDataPeer get output details for inputs using the header
-func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, *string) {
+func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, error) {
 	i := 0
 	used := -1
 	found := false
-	id := 0
 	var err error
 	// arrange inputs
 	for i = 0; i < len(data.Inputs); i++ {
-		found, id, used, err = ctx.getPeerOut(data.Inputs[i].Header, &data.Inputs[i].u)
+		found, data.Inputs[i].u.id, used, err = ctx.getPeerOut(data.Inputs[i].Header, &data.Inputs[i].u)
 		if found == false {
-			errM := "could not find h:" + string(data.Inputs[i].Header) + err.Error()
-			return false, &errM
+			return false, err
 		}
 		if used != 0 {
-			errM := "already used input:" + string(data.Inputs[i].Header)
-			return false, &errM
+			return false, errors.New("TXHELPER_REUSED_IN" + err.Error())
 		}
-		data.Inputs[i].u.id = id
 
 		// copy public key
 		if i < len(data.Inputs) && (ctx.txModel == 2 || ctx.txModel == 4 || ctx.txModel == 6) {
@@ -136,7 +136,7 @@ func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, *string) {
 }
 
 // UpdateAppDataClient update user details for new app data changes
-func (ctx *ExeContext) UpdateAppDataClient(data *AppData) {
+func (ctx *ExeContext) UpdateAppDataClient(data *AppData) (bool, error) {
 	i := 0
 
 	// utxo
@@ -144,7 +144,10 @@ func (ctx *ExeContext) UpdateAppDataClient(data *AppData) {
 		// save outputs
 		for i = 0; i < len(data.Outputs); i++ {
 			//update client db with new data
-			ctx.updateClientOut(data.Outputs[i].u.id, &data.Outputs[i].u)
+			ok, err := ctx.updateClientOut(data.Outputs[i].u.id, &data.Outputs[i].u)
+			if !ok {
+				return false, err
+			}
 		}
 	}
 	// account
@@ -153,13 +156,20 @@ func (ctx *ExeContext) UpdateAppDataClient(data *AppData) {
 		for i = 0; i < len(data.Inputs); i++ {
 			data.Inputs[i].u.N = data.Outputs[i].N
 			data.Inputs[i].u.H = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
-			ctx.updateClientOut(data.Inputs[i].u.id, &data.Inputs[i].u)
+			ok, err := ctx.updateClientOut(data.Inputs[i].u.id, &data.Inputs[i].u)
+			if !ok {
+				return false, err
+			}
 		}
 		for i = len(data.Inputs); i < len(data.Outputs); i++ {
 			data.Outputs[i].u.H = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
-			ctx.updateClientOut(data.Outputs[i].u.id, &data.Outputs[i].u)
+			ok, err := ctx.updateClientOut(data.Outputs[i].u.id, &data.Outputs[i].u)
+			if !ok {
+				return false, err
+			}
 		}
 	}
+	return true, nil
 }
 
 // UpdateAppDataPeer update output details for new app data changes
@@ -282,12 +292,11 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 		}
 		data.Inputs[i].u.id = ctx.inputPointer
 		// get user from client db
-		if ctx.getClientOut(data.Inputs[i].u.id, &data.Inputs[i].u) == false {
-			log.Fatal("utxoAppData: could not find user id:", data.Inputs[i].u.id)
+		ok, err := ctx.getClientOut(data.Inputs[i].u.id, &data.Inputs[i].u)
+		if !ok {
+			log.Fatal("utxoAppData: could not find user id:", data.Inputs[i].u.id, err) // This should not happen
 		}
 
-		//fmt.Println("in", i, data.Inputs[i].u.id, ctx.inputPointer, ctx.outputPointer)
-		// copy the header
 		data.Inputs[i].Header = make([]byte, len(data.Inputs[i].u.H))
 		copy(data.Inputs[i].Header, data.Inputs[i].u.H)
 		ctx.inputPointer++
@@ -321,11 +330,15 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 			ctx.CurrentUsers++
 		}
 		data.Outputs[i].u.id = ctx.outputPointer // save for client db
-		ctx.insertClientOut(ctx.outputPointer, &data.Outputs[i].u)
+		ok, err := ctx.insertClientOut(ctx.outputPointer, &data.Outputs[i].u)
+		if !ok {
+			log.Fatal("couldn't insert outputs:", err)
+		}
 		keyBuf.Reset()
 		// compute the header
-		if ctx.getClientOut(data.Outputs[i].u.id, &data.Outputs[i].u) == false {
-			log.Fatal("utxoAppData: could not find user id:", data.Outputs[i].u.id)
+		ok, err = ctx.getClientOut(data.Outputs[i].u.id, &data.Outputs[i].u)
+		if !ok {
+			log.Fatal("utxoAppData: could not find user id:", data.Outputs[i].u.id, err) // This should not happen
 		}
 
 		// copy the public key
@@ -334,7 +347,6 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 		if len(data.Outputs[i].u.Keys) != int(ctx.sigContext.PkSize+ctx.sigContext.SkSize) {
 			log.Fatal("invalid pk size")
 		}
-		//fmt.Println("out", i, data.Outputs[i].u.id, ctx.inputPointer, ctx.outputPointer)
 		// update n
 		data.Outputs[i].u.N += 1
 		data.Outputs[i].N = data.Outputs[i].u.N
@@ -383,10 +395,10 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 		id += 1
 		data.Inputs[i].u.id = (id) % ctx.CurrentUsers // save for db
 		// get random user from client db
-		if ctx.getClientOut(data.Inputs[i].u.id, &data.Inputs[i].u) == false {
-			log.Fatal("accAppData: could not find user id:", id, inSize, data.Inputs[i].u.id, ctx.CurrentUsers)
+		ok, err := ctx.getClientOut(data.Inputs[i].u.id, &data.Inputs[i].u)
+		if !ok {
+			log.Fatal("accAppData: could not find user id:", id, inSize, data.Inputs[i].u.id, ctx.CurrentUsers, err)
 		}
-		//fmt.Println("input:", data.Inputs[i].u.id, data.Inputs[i].u.Keys)
 		// if N = 0 is zero then no previous outputs were created
 		if data.Inputs[i].u.N == 0 {
 			break
@@ -428,14 +440,17 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 			Data:   make([]byte, ctx.payloadSize),
 			UDelta: make([]byte, 0),
 		}
-		data.Outputs[i].u.id = ctx.CurrentUsers                   // save for db
-		ctx.insertClientOut(ctx.CurrentUsers, &data.Outputs[i].u) // todo fix this
+		data.Outputs[i].u.id = ctx.CurrentUsers // save for db
+		ok, err := ctx.insertClientOut(ctx.CurrentUsers, &data.Outputs[i].u)
+		if !ok {
+			log.Fatal("couldn't insert outputs:", err)
+		}
 		ctx.CurrentUsers += 1
 		keyBuf.Reset()
-		//fmt.Println("created:", data.Outputs[i].u.id, data.Outputs[i].u.Keys)
 		// tests
-		if ctx.getClientOut(data.Outputs[i].u.id, &data.Outputs[i].u) == false {
-			log.Fatal("accAppData: could not find user id:", id)
+		ok, err = ctx.getClientOut(data.Outputs[i].u.id, &data.Outputs[i].u)
+		if !ok {
+			log.Fatal("accAppData: could not find user id:", id, err)
 		}
 
 		// copy the public key

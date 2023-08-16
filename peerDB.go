@@ -30,12 +30,12 @@ func byte4toInt(bytes []byte) (a int) {
 	return a
 }
 
-func (ctx *ExeContext) initPeerDB() {
+func (ctx *ExeContext) initPeerDB() (bool, error) {
 	var err error
 
 	ctx.db, err = sql.Open("sqlite3", "peer"+strconv.FormatInt(int64(ctx.exeId), 10)+".db")
 	if err != nil {
-		log.Fatal(err)
+		return false, err
 	}
 
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
@@ -44,7 +44,7 @@ func (ctx *ExeContext) initPeerDB() {
 			"CREATE TABLE outputs(id INTEGER PRIMARY KEY AUTOINCREMENT, h BLOB UNIQUE, pk BLOB, n INTEGER, Data BLOB, used INTEGER);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// allInIds - stores an int array of input ids
 		// allOutIds - stores an int array of allOutIds ids
@@ -52,14 +52,14 @@ func (ctx *ExeContext) initPeerDB() {
 			"CREATE TABLE txHeaders(txn INTEGER PRIMARY KEY AUTOINCREMENT, sigAll BLOB, allInIds BLOB, allOutIds BLOB);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// create an index table for h
 		statement = "DROP TABLE IF EXISTS outputs_index; " +
 			"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		if ctx.txModel == 2 || ctx.txModel == 4 {
 			// create an index table for pk
@@ -67,7 +67,7 @@ func (ctx *ExeContext) initPeerDB() {
 				"CREATE INDEX outputs_index2 ON outputs (pk ASC);"
 			_, err = ctx.db.Exec(statement)
 			if err != nil {
-				log.Fatal(err)
+				return false, err
 			}
 		}
 	} else if ctx.txModel == 5 {
@@ -75,27 +75,27 @@ func (ctx *ExeContext) initPeerDB() {
 			"CREATE TABLE outputs(id INTEGER PRIMARY KEY AUTOINCREMENT, h BLOB UNIQUE, pk BLOB, n INTEGER, Data BLOB, used INTEGER);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		statement = "DROP TABLE IF EXISTS txHeaders; " +
 			"CREATE TABLE txHeaders(txn INTEGER PRIMARY KEY AUTOINCREMENT, activity BLOB, excess BLOB, sig BLOB);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// create an index table for h
 		statement = "DROP INDEX IF EXISTS outputs_index; " +
 			"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// create an index table for pk
 		statement = "DROP INDEX IF EXISTS outputs_index2; " +
 			"CREATE UNIQUE INDEX outputs_index2 ON outputs (pk ASC);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	} else if ctx.txModel == 6 {
 		// used - 0 (not used for inputs), 1 (used once), if used > 1 is invalid (used for verification)
@@ -103,7 +103,7 @@ func (ctx *ExeContext) initPeerDB() {
 			"CREATE TABLE outputs(id INTEGER PRIMARY KEY AUTOINCREMENT, h BLOB UNIQUE, pk BLOB UNIQUE, n INTEGER, Data BLOB, sig BLOB, Txns BLOB, used INTEGER);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// allInIds - stores an int array of input ids
 		// allOutIds - stores an int array of allOutIds ids
@@ -111,23 +111,24 @@ func (ctx *ExeContext) initPeerDB() {
 			"CREATE TABLE txHeaders(txn INTEGER PRIMARY KEY AUTOINCREMENT, activity BLOB, allOutIds BLOB);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// create an index table for h
 		statement = "DROP INDEX IF EXISTS outputs_index; " +
 			"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		// create an index table for pk
 		statement = "DROP INDEX IF EXISTS outputs_index2; " +
 			"CREATE UNIQUE INDEX outputs_index2 ON outputs (pk ASC);"
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	}
+	return true, nil
 }
 
 // insertPeerOut enter an outputdata. For Origami, give txn as well.
@@ -243,14 +244,14 @@ func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int, error) {
 		row := ctx.db.QueryRow("SELECT id, pk, n, data, used  FROM outputs WHERE h = ?;", h)
 		err = row.Scan(&id, &out.Keys, &out.N, &out.Data, &used)
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, -1, -1, err
+			return false, -1, -1, errors.New("TXHELPER_NOT_FOUND_OUT")
 		}
 	} else if ctx.txModel == 6 {
 		var outbuf []byte
 		row := ctx.db.QueryRow("SELECT id, pk, n, data, Txns, used  FROM outputs WHERE h = ?;", h)
 		err = row.Scan(&id, &out.Keys, &out.N, &out.Data, &outbuf, &used)
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, -1, -1, err
+			return false, -1, -1, errors.New("TXHELPER_NOT_FOUND_OUT")
 		}
 		// recover delta
 		out.Txns = make([]int, len(outbuf)/4)
@@ -370,11 +371,10 @@ func (ctx *ExeContext) insertPeerTxHeader(txn int, tx *Transaction) (bool, error
 	return true, nil
 }
 
-func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, *string) {
+func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, error) {
 	var inBuf []byte
 	var outBuf []byte
 	var sigAll []byte
-	id := 0
 	used := 0
 
 	var tx Transaction
@@ -384,8 +384,7 @@ func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, *string) {
 		row := ctx.db.QueryRow("SELECT sigAll, allInIds, allOutIds  FROM txHeaders WHERE txn = ?;", txn)
 		err := row.Scan(&sigAll, &inBuf, &outBuf)
 		if errors.Is(err, sql.ErrNoRows) {
-			errM := "could not find txn " + string(rune(txn))
-			return nil, false, &errM
+			return nil, false, err
 		}
 		// get inputs
 		tx.Data.Inputs = make([]InputData, len(inBuf)/4)
@@ -394,8 +393,7 @@ func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, *string) {
 			row = ctx.db.QueryRow("SELECT h, pk, n, Data, used from outputs WHERE id = ?;", tx.Data.Inputs[i].u.id)
 			err = row.Scan(&tx.Data.Inputs[i].Header, &tx.Data.Inputs[i].u.Keys, &tx.Data.Inputs[i].u.N, &tx.Data.Inputs[i].u.Data, &used)
 			if errors.Is(err, sql.ErrNoRows) {
-				errM := "could not find input id " + string(rune(id))
-				return nil, false, &errM
+				return nil, false, err
 			}
 		}
 		// get outputs
@@ -405,8 +403,7 @@ func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, *string) {
 			row = ctx.db.QueryRow("SELECT h, pk, n, Data, used from outputs WHERE id = ?;", tx.Data.Outputs[i].u.id)
 			err = row.Scan(&tx.Data.Outputs[i].u.H, &tx.Data.Outputs[i].Pk, &tx.Data.Outputs[i].N, &tx.Data.Outputs[i].Data, &used)
 			if errors.Is(err, sql.ErrNoRows) {
-				errM := "could not find output id " + string(rune(id))
-				return nil, false, &errM
+				return nil, false, err
 			}
 			//fmt.Println("got id (txH)", tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].Pk)
 		}
@@ -431,19 +428,18 @@ func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, *string) {
 }
 
 // getTxHeader returns headers data for origami utxo verification
-func (ctx *ExeContext) getTxHeader(txn int, txh *TxHeader) (bool, *string) {
+func (ctx *ExeContext) getTxHeader(txn int, txh *TxHeader) (bool, error) {
 	row := ctx.db.QueryRow("SELECT activity, excess, sig  FROM txHeaders WHERE txn = ?;", txn)
 	txh.Kyber = make([]Signature, 1)
 	err := row.Scan(&txh.activityProof, &txh.excessPK, &txh.Kyber[0])
 	if errors.Is(err, sql.ErrNoRows) {
-		errM := "could not find txn " + string(rune(txn))
-		return false, &errM
+		return false, err
 	}
 	return true, nil
 }
 
 // setActivityTable arrange db data for origami account verification
-func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
+func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, error) {
 	if ctx.txModel != 6 {
 		log.Fatal("these functions are not needed")
 	}
@@ -460,14 +456,12 @@ func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
 
 	stmt, err := ctx.db.Prepare("SELECT txn, activity, allOutIds  FROM txHeaders;")
 	if err != nil {
-		errM := err.Error()
-		return nil, nil, &errM
+		return nil, nil, err
 	}
 	defer stmt.Close()
 	rows, err := stmt.Query()
 	if err != nil {
-		errM := err.Error()
-		return nil, nil, &errM
+		return nil, nil, err
 	}
 	defer rows.Close()
 
@@ -475,8 +469,7 @@ func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
 		rows.Scan(&txn, &activity, &outBuf)
 
 		if len(activity) != 33 { // check current length
-			errM := "invalid activity proof"
-			return nil, nil, &errM
+			return nil, nil, errors.New("TXHELPER_INVALID_ACTIVITY")
 		}
 
 		// update the prod of activities
@@ -486,8 +479,7 @@ func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
 		for i := 0; i < len(outBuf)/4; i++ {
 			for j := i + 1; j < len(outBuf)/4; j++ {
 				if byte4toInt(outBuf[i*4:]) == byte4toInt(outBuf[j*4:]) {
-					errM := "reused public keys"
-					return nil, nil, &errM
+					return nil, nil, errors.New("TXHELPER_REUSED_PK")
 				}
 			}
 		}
@@ -500,8 +492,7 @@ func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
 	activityProd := make([]byte, 33)
 	C.BN_bn2binpad(d, (*C.uchar)(unsafe.Pointer(&activityProd[0])), 33)
 	if err = rows.Err(); err != nil {
-		errM := "could not read txHeaders"
-		return nil, nil, &errM
+		return nil, nil, errors.New("TXHELPER_INVALID_TXH")
 	}
 	return activities, activityProd, nil
 }

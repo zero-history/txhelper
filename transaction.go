@@ -48,7 +48,8 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 	if ctx.uType == 2 {
 		_, err := ctx.PrepareAppDataPeer(&tx.Data)
 		if err != nil {
-			return false, err
+			errM := err.Error()
+			return false, &errM
 		}
 	} else if ctx.uType == 1 {
 		ctx.PrepareAppDataClient(&tx.Data)
@@ -147,15 +148,15 @@ func (ctx *ExeContext) GetTxHeaderIdentifier(tx *Transaction, txBytes []byte) (b
 func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
-		var val bool
 		//set used to 0
 		used := make([]uint8, ctx.CurrentOutputs)
 		usedHeader := make([][]byte, ctx.CurrentOutputs)
 		//verify all tx from 0 while resetting used
 		for i := 0; i < ctx.TotalTx; i++ {
-			tx, ok, errM := ctx.getStoredTx(i)
+			tx, ok, err := ctx.getStoredTx(i)
 			if !ok {
-				return false, errM
+				errM := err.Error()
+				return false, &errM
 			}
 			// unique headers
 			for j := 0; j < len(tx.Data.Inputs); j++ {
@@ -192,7 +193,7 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 					}
 				}
 			}
-			val, errM = ctx.VerifyTxHeader(&tx.Txh, &tx.Data)
+			val, errM := ctx.VerifyTxHeader(&tx.Txh, &tx.Data)
 			if !val {
 				return false, errM
 			}
@@ -223,7 +224,8 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 
 		activities, activityProd, err := ctx.setActivityTable()
 		if err != nil {
-			return false, err
+			errM := err.Error()
+			return false, &errM
 		}
 		for i := 0; i < ctx.CurrentUsers; i++ {
 			found, _, err := ctx.getPeerOutFromID(i, &user)

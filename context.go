@@ -26,9 +26,10 @@ type ExeContext struct {
 	averageOutputMax uint8  // average number of outputs  will be in [0, averageOutputMax]
 	distributionType int    // output Data size distribution
 
-	TotalUsers int // total number of users represented if this is a client
-	TotalTx    int // total number of transactions if this is a peer
-	TotalBlock int // total number of blocks  if this is a peer
+	TotalUsers  int // total number of users represented if this is a client
+	TotalTx     int // total number of transactions if this is a peer
+	TotalBlock  int // total number of blocks  if this is a peer
+	maxBlockTxs int // maximum number of transactions included in a blocks, so the users will not use the same inputs
 
 	inputPointer   int // inputs are chosen from round-robin method
 	outputPointer  int // inputs are chosen from round-robin method
@@ -64,6 +65,7 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 		CurrentUsers:     0,
 		CurrentOutputs:   0,
 		DeletedOutputs:   0,
+		maxBlockTxs:      10, // todo change
 	}
 
 	// generate group context
@@ -85,12 +87,21 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 	// generate all users for clients
 	if uType == 1 {
 		if ctx.txModel == 1 || ctx.txModel == 3 || ctx.txModel == 5 {
-			ctx.initClientDB()
+			ok, err := ctx.initClientDB()
+			if !ok {
+				log.Fatal("couldn't initiate the db:", err)
+			}
 		} else if ctx.txModel == 2 || ctx.txModel == 4 || ctx.txModel == 6 {
-			ctx.initClientDB()
+			ok, err := ctx.initClientDB()
+			if !ok {
+				log.Fatal("couldn't initiate the db:", err)
+			}
 		}
 	} else if ctx.uType == 2 {
-		ctx.initPeerDB()
+		ok, err := ctx.initPeerDB()
+		if !ok {
+			log.Fatal("couldn't initiate the db:", err)
+		}
 	} else {
 		log.Fatal("unknown utype")
 	}
