@@ -90,16 +90,17 @@ func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, *string) {
 	used := -1
 	found := false
 	id := 0
+	var err error
 	// arrange inputs
 	for i = 0; i < len(data.Inputs); i++ {
-		found, id, used = ctx.getPeerOut(data.Inputs[i].Header, &data.Inputs[i].u)
+		found, id, used, err = ctx.getPeerOut(data.Inputs[i].Header, &data.Inputs[i].u)
 		if found == false {
-			err := "could not find h:" + string(data.Inputs[i].Header)
-			return false, &err
+			errM := "could not find h:" + string(data.Inputs[i].Header) + err.Error()
+			return false, &errM
 		}
 		if used != 0 {
-			err := "already used input:" + string(data.Inputs[i].Header)
-			return false, &err
+			errM := "already used input:" + string(data.Inputs[i].Header)
+			return false, &errM
 		}
 		data.Inputs[i].u.id = id
 
@@ -162,22 +163,28 @@ func (ctx *ExeContext) UpdateAppDataClient(data *AppData) {
 }
 
 // UpdateAppDataPeer update output details for new app data changes
-func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
+func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) (bool, *string) {
 	i := 0
 	header := make([]byte, sha256.Size)
+	var errM string
 	// utxo
 	if ctx.txModel == 1 || ctx.txModel == 3 {
 		for i = 0; i < len(tx.Data.Inputs); i++ {
-			ok := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, nil, 0, nil, nil, nil, 1) // update "used"
+			ok, err := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, nil, 0, nil, nil, nil, 1) // update "used"
 			if !ok {
-				log.Fatal("I couldn't find the input. Did you verify the app data?: ", tx.Data.Inputs[i].u.id)
+				errM = "I couldn't find the input. Did you verify the app data?:" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
+				return false, &errM
 			}
 		}
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
 			//update client db with new data
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			if !ok {
+				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
 		}
 		ctx.CurrentOutputs += len(tx.Data.Outputs)
 	}
@@ -186,9 +193,10 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 		// modify inputs' into ``used'' inputs
 		for i = 0; i < len(tx.Data.Inputs); i++ {
 			if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-				ok := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, nil, 0, nil, nil, nil, 1) // update "used"
+				ok, err := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, nil, 0, nil, nil, nil, 1) // update "used"
 				if !ok {
-					log.Fatal("I couldn't find the input. Did you verify the app data?: ", tx.Data.Inputs[i].u.id)
+					errM = "I couldn't update the input" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
+					return false, &errM
 				}
 			} else {
 				log.Fatal("unknown sigType:", ctx.sigContext.SigType)
@@ -197,21 +205,31 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			if !ok {
+				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
 		}
 		ctx.CurrentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs) // update the current user size
 		ctx.CurrentOutputs += len(tx.Data.Outputs)                     // update the current output number
 	} else if ctx.txModel == 5 {
 		// delete inputs
 		for i = 0; i < len(tx.Data.Inputs); i++ {
-			if !ctx.deletePeerOut(tx.Data.Inputs[i].u.id) {
-				log.Fatal("couldn't delete the input. Does it exist?")
+			ok, err := ctx.deletePeerOut(tx.Data.Inputs[i].u.id)
+			if !ok {
+				errM = "couldn't delete the input. Does it exist" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
+				return false, &errM
 			}
 		}
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			if !ok {
+				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
 		}
 		ctx.CurrentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
 		ctx.DeletedOutputs += len(tx.Data.Inputs)
@@ -221,9 +239,10 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
 				tx.Data.Inputs[i].u.Txns = append(tx.Data.Inputs[i].u.Txns, txn)
-				ok := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, header, int(tx.Data.Outputs[i].N), tx.Data.Outputs[i].Data, tx.Txh.Kyber[i], tx.Data.Inputs[i].u.Txns, 0)
+				ok, err := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, header, int(tx.Data.Outputs[i].N), tx.Data.Outputs[i].Data, tx.Txh.Kyber[i], tx.Data.Inputs[i].u.Txns, 0)
 				if !ok {
-					log.Fatal("I couldn't find the input. Did you verify the app data?")
+					errM = "I couldn't update the input" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
+					return false, &errM
 				}
 			} else {
 				log.Fatal("unknown sigType:", ctx.sigContext.SigType)
@@ -234,19 +253,24 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			tx.Data.Outputs[i].u.Txns = make([]int, 1)
 			tx.Data.Outputs[i].u.Txns[0] = txn
-			ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], tx.Txh.Kyber[i])
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], tx.Txh.Kyber[i])
+			if !ok {
+				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
 		}
 		ctx.CurrentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs)
 		ctx.CurrentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
 		ctx.DeletedOutputs += len(tx.Data.Inputs)
 	}
+	return true, nil
 }
 
 // utxoAppData returns a random application update for UTXO-based models
 // Users can have more than one output
 // We choose input users and output users in round-robin manner
 func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, averageSize uint16) {
-	i := int(0)
+	i := 0
 	dataSize := 0
 
 	// arrange inputs

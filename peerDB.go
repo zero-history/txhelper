@@ -131,17 +131,17 @@ func (ctx *ExeContext) initPeerDB() {
 }
 
 // insertPeerOut enter an outputdata. For Origami, give txn as well.
-func (ctx *ExeContext) insertPeerOut(id int, h []byte, out *OutputData, sig []byte) {
+func (ctx *ExeContext) insertPeerOut(id int, h []byte, out *OutputData, sig []byte) (bool, error) {
 
 	if ctx.txModel >= 1 && ctx.txModel <= 5 {
 		stm, err := ctx.db.Prepare("INSERT INTO outputs(id, h, pk, n, Data, used) VALUES(?, ?, ?, ?, ?, ?);")
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(id, h, out.Pk, out.N, out.Data, 0)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	} else if ctx.txModel == 6 {
 		txnBytes := make([]byte, len(out.u.Txns)*4)
@@ -150,49 +150,48 @@ func (ctx *ExeContext) insertPeerOut(id int, h []byte, out *OutputData, sig []by
 		}
 		stm, err := ctx.db.Prepare("INSERT INTO outputs(id, h, pk, n, Data, sig, Txns, used) VALUES(?, ?, ?, ?, ?, ?, ?, ?);")
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(id, h, out.Pk, out.N, out.Data, sig, txnBytes, 0)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	}
+	return true, nil
 }
 
 // deletePeerOut deletes an output from id
-func (ctx *ExeContext) deletePeerOut(id int) bool {
+func (ctx *ExeContext) deletePeerOut(id int) (bool, error) {
 
 	stm, err := ctx.db.Prepare("DELETE FROM outputs WHERE id = ?;")
 	if err != nil {
-		log.Fatal("Error deletePeerOut:", err)
+		return false, err
 	}
 	defer stm.Close()
 	_, err = stm.Exec(id)
 	if err != nil {
-		log.Println("could not delete id:", id)
-		return false
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // updatePeerOut only updates used in (1-4). for 6: updates " n = ?, data = ?, sig = ?, used = ?"
-func (ctx *ExeContext) updatePeerOut(id int, h []byte, n int, data []byte, sig []byte, txns []int, used int) bool {
+func (ctx *ExeContext) updatePeerOut(id int, h []byte, n int, data []byte, sig []byte, txns []int, used int) (bool, error) {
 
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
 		stm, err := ctx.db.Prepare("UPDATE outputs SET used = used + ? WHERE id = ?;")
 		if err != nil {
-			log.Fatal("Error updatePeerOut:", err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(used, id)
 		if err != nil {
-			log.Println("could not update id:", id)
-			return false
+			return false, err
 		}
 
 	} else if ctx.txModel == 5 {
-		log.Fatal("not implemented")
+		log.Fatal("no need")
 	} else if ctx.txModel == 6 {
 		txnBytes := make([]byte, len(txns)*4)
 		for i := 0; i < len(txns); i++ {
@@ -200,16 +199,15 @@ func (ctx *ExeContext) updatePeerOut(id int, h []byte, n int, data []byte, sig [
 		}
 		stm, err := ctx.db.Prepare("UPDATE outputs SET h = ?, n = ?, data = ?, sig = ?, Txns = ?, used = ? WHERE id = ?;")
 		if err != nil {
-			log.Fatal("Error updateClientOut:", err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(h, n, data, sig, txnBytes, used, id)
 		if err != nil {
-			log.Println("could not update h:", id)
-			return false
+			return false, err
 		}
 	}
-	return true
+	return true, nil
 }
 
 func (ctx *ExeContext) usedPeerOutHeader(h []byte) (bool, int) {
@@ -236,7 +234,7 @@ func (ctx *ExeContext) usedPeerOutPublicKey(pk []byte) (bool, int) {
 	return true, id
 }
 
-func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int) {
+func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int, error) {
 	var err error
 	used := 0
 	id := 0
@@ -245,16 +243,14 @@ func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int) {
 		row := ctx.db.QueryRow("SELECT id, pk, n, data, used  FROM outputs WHERE h = ?;", h)
 		err = row.Scan(&id, &out.Keys, &out.N, &out.Data, &used)
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Print("could not find h ", h)
-			return false, -1, -1
+			return false, -1, -1, err
 		}
 	} else if ctx.txModel == 6 {
 		var outbuf []byte
 		row := ctx.db.QueryRow("SELECT id, pk, n, data, Txns, used  FROM outputs WHERE h = ?;", h)
 		err = row.Scan(&id, &out.Keys, &out.N, &out.Data, &outbuf, &used)
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Print("could not find h ", h)
-			return false, -1, -1
+			return false, -1, -1, err
 		}
 		// recover delta
 		out.Txns = make([]int, len(outbuf)/4)
@@ -265,16 +261,15 @@ func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int) {
 			row = ctx.db.QueryRow("SELECT activity  FROM txHeaders WHERE txn = ?;", out.Txns[i])
 			err = row.Scan(&activity)
 			if errors.Is(err, sql.ErrNoRows) {
-				log.Print("could not find txn ", out.Txns[i])
-				return false, -1, -1
+				return false, -1, -1, err
 			}
 			copy(out.UDelta[i*33:], activity)
 		}
 	}
-	return true, id, used
+	return true, id, used, nil
 }
 
-func (ctx *ExeContext) getPeerOutFromID(id int, out *User) (bool, int) {
+func (ctx *ExeContext) getPeerOutFromID(id int, out *User) (bool, int, error) {
 	var err error
 	used := 0
 
@@ -282,16 +277,14 @@ func (ctx *ExeContext) getPeerOutFromID(id int, out *User) (bool, int) {
 		row := ctx.db.QueryRow("SELECT h, id, pk, n, data, used  FROM outputs WHERE id = ?;", id)
 		err = row.Scan(&out.H, &out.Keys, &out.N, &out.Data, &used)
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Print("could not find id ", id)
-			return false, -1
+			return false, -1, err
 		}
 	} else if ctx.txModel == 6 {
 		var outbuf []byte
 		row := ctx.db.QueryRow("SELECT h, pk, n, data, sig, Txns, used  FROM outputs WHERE id = ?;", id)
 		err = row.Scan(&out.H, &out.Keys, &out.N, &out.Data, &out.sig, &outbuf, &used)
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Print("could not find id ", id)
-			return false, -1
+			return false, -1, err
 		}
 
 		// recover delta
@@ -303,23 +296,21 @@ func (ctx *ExeContext) getPeerOutFromID(id int, out *User) (bool, int) {
 			row = ctx.db.QueryRow("SELECT activity  FROM txHeaders WHERE txn = ?;", out.Txns[i])
 			err = row.Scan(&activity)
 			if errors.Is(err, sql.ErrNoRows) {
-				log.Print("could not find txn ", out.Txns[i])
-				return false, -1
+				return false, -1, err
 			}
 			copy(out.UDelta[i*33:], activity)
 		}
 	}
-	return true, used
+	return true, used, nil
 }
 
-func (ctx *ExeContext) insertPeerTxHeader(txn int, tx *Transaction) {
+func (ctx *ExeContext) insertPeerTxHeader(txn int, tx *Transaction) (bool, error) {
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
 		// collect signatures into a byte array
 		sigbuf := make([]byte, len(tx.Txh.Kyber)*int(ctx.sigContext.SigSize))
 		if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
 			for i := 0; i < len(tx.Txh.Kyber); i++ {
 				copy(sigbuf[i*int(ctx.sigContext.SigSize):], tx.Txh.Kyber[i])
-				//fmt.Println("sig:", i, tx.Txh.Kyber[i])
 			}
 		} else {
 			log.Fatal("unknown signature type:", ctx.sigContext.SigType)
@@ -337,26 +328,26 @@ func (ctx *ExeContext) insertPeerTxHeader(txn int, tx *Transaction) {
 		}
 		stm, err := ctx.db.Prepare("INSERT INTO txHeaders(txn, sigAll, allInIds, allOutIds) VALUES(?, ?, ?, ?);")
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(txn, sigbuf, inbuf, outbuf)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	} else if ctx.txModel == 5 {
 		stm, err := ctx.db.Prepare("INSERT INTO txHeaders(txn, activity, excess, sig) VALUES(?, ?, ?, ?);")
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(txn, tx.Txh.activityProof, tx.Txh.excessPK, tx.Txh.Kyber[0])
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	} else if ctx.txModel == 6 {
 		if len(tx.Txh.activityProof) != 33 {
-			log.Fatal("activityProof is not created. Did you verify the transaction?")
+			return false, errors.New("unverified transactions")
 		}
 		// collect output ids into an int array
 		outbuf := make([]byte, 4*len(tx.Data.Outputs))
@@ -368,14 +359,15 @@ func (ctx *ExeContext) insertPeerTxHeader(txn int, tx *Transaction) {
 		}
 		stm, err := ctx.db.Prepare("INSERT INTO txHeaders(txn, activity, allOutIds) VALUES(?, ?, ?);")
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 		defer stm.Close()
 		_, err = stm.Exec(txn, tx.Txh.activityProof, outbuf)
 		if err != nil {
-			log.Fatal(err)
+			return false, err
 		}
 	}
+	return true, nil
 }
 
 func (ctx *ExeContext) getStoredTx(txn int) (*Transaction, bool, *string) {
@@ -468,12 +460,14 @@ func (ctx *ExeContext) setActivityTable() ([]bytes.Buffer, []byte, *string) {
 
 	stmt, err := ctx.db.Prepare("SELECT txn, activity, allOutIds  FROM txHeaders;")
 	if err != nil {
-		log.Fatal(err)
+		errM := err.Error()
+		return nil, nil, &errM
 	}
 	defer stmt.Close()
 	rows, err := stmt.Query()
 	if err != nil {
-		log.Fatal(err)
+		errM := err.Error()
+		return nil, nil, &errM
 	}
 	defer rows.Close()
 

@@ -57,12 +57,14 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 	for j := 0; j < len(tx.Data.Inputs); j++ {
 		for l := j + 1; l < len(tx.Data.Inputs); l++ {
 			if bytes.Equal(tx.Data.Inputs[j].Header, tx.Data.Inputs[l].Header) {
-				log.Fatal("duplicate headers in inputs")
+				errM := "duplicate headers in inputs"
+				return false, &errM
 			}
 		}
 		for l := 0; l < len(tx.Data.Outputs); l++ {
 			if bytes.Equal(tx.Data.Outputs[l].u.H, tx.Data.Inputs[j].Header) {
-				log.Fatal("duplicate headers in inputs")
+				errM := "duplicate headers in input"
+				return false, &errM
 			}
 		}
 	}
@@ -71,7 +73,8 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 		for j := len(tx.Data.Inputs); j < len(tx.Data.Outputs); j++ {
 			found, _ := ctx.usedPeerOutPublicKey(tx.Data.Outputs[j].Pk)
 			if found {
-				log.Fatal("used public keys in new accounts")
+				errM := "used public keys in new accounts"
+				return false, &errM
 			}
 		}
 	}
@@ -81,9 +84,8 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 		for j := 0; j < len(tx.Data.Outputs); j++ {
 			for l := j + 1; l < len(tx.Data.Outputs); l++ {
 				if bytes.Equal(tx.Data.Outputs[j].Pk, tx.Data.Outputs[l].Pk) {
-					log.Println(tx.Data.Outputs[0].Pk)
-					log.Println(tx.Data.Outputs[1].Pk)
-					log.Fatal("duplicate pk in outputs", j, l)
+					errM := "duplicate pk in outputs"
+					return false, &errM
 				}
 			}
 		}
@@ -92,19 +94,25 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 }
 
 // InsertTxHeader adds a transaction header, which was verified before.
-func (ctx *ExeContext) InsertTxHeader(txn int, tx *Transaction) {
+func (ctx *ExeContext) InsertTxHeader(txn int, tx *Transaction) (bool, *string) {
 	if ctx.uType == 2 {
-		ctx.insertPeerTxHeader(txn, tx)
+		ok, err := ctx.insertPeerTxHeader(txn, tx)
+		if !ok {
+			errM := "could not insert header:" + err.Error()
+			return false, &errM
+		}
 		ctx.TotalTx += 1
 	} else {
 		log.Fatal("only peers can add txHeaders")
 	}
+	return true, nil
 }
 
 // GetTxHeaderIdentifier outputs an identifier a special hash to be included into the tx block hash computation
 // for classics: hash is the hash of the entire transaction
 // for origami: hash is the hash of (activity, all account pks)
-func (ctx *ExeContext) GetTxHeaderIdentifier(tx *Transaction, txBytes []byte) (txIdentifier []byte) {
+func (ctx *ExeContext) GetTxHeaderIdentifier(tx *Transaction, txBytes []byte) (bool, []byte, *string) {
+	var txIdentifier []byte
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
 		if txBytes == nil {
 			txBytes = ctx.ToBytes(tx)
@@ -114,7 +122,8 @@ func (ctx *ExeContext) GetTxHeaderIdentifier(tx *Transaction, txBytes []byte) (t
 	} else if ctx.txModel == 5 {
 		hasher := sha3.New256()
 		if len(tx.Txh.activityProof) != 33 {
-			log.Fatal("activity is empty. Did yoy verify the transaction?")
+			errM := "activity is empty. Did yoy verify the transaction?"
+			return false, nil, &errM
 		}
 		hasher.Write(tx.Txh.activityProof)
 		hasher.Write(tx.Txh.excessPK)
@@ -122,7 +131,8 @@ func (ctx *ExeContext) GetTxHeaderIdentifier(tx *Transaction, txBytes []byte) (t
 	} else if ctx.txModel == 6 {
 		hasher := sha3.New256()
 		if len(tx.Txh.activityProof) != 33 {
-			log.Fatal("activity is empty. Did yoy verify the transaction?")
+			errM := "activity is empty. Did yoy verify the transaction?"
+			return false, nil, &errM
 		}
 		hasher.Write(tx.Txh.activityProof)
 		for i := 0; i < len(tx.Data.Outputs); i++ {
@@ -130,7 +140,7 @@ func (ctx *ExeContext) GetTxHeaderIdentifier(tx *Transaction, txBytes []byte) (t
 		}
 		txIdentifier = hasher.Sum(nil)
 	}
-	return txIdentifier
+	return true, txIdentifier, nil
 }
 
 // VerifyStoredAllTransaction verifies all stored transactions
@@ -216,9 +226,9 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 			return false, err
 		}
 		for i := 0; i < ctx.CurrentUsers; i++ {
-			found, _ := ctx.getPeerOutFromID(i, &user)
+			found, _, err := ctx.getPeerOutFromID(i, &user)
 			if !found {
-				errM := "user doesn't exist"
+				errM := "user doesn't exist:" + err.Error()
 				return false, &errM
 			}
 			// check the validity of activities

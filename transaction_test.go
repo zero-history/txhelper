@@ -97,8 +97,14 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 			tester.Fatal("invalid transaction convertion in the peer:"+*err, ctx.txModel)
 		}
 
-		ctxPeer.UpdateAppDataPeer(i, &tx1)
-		ctxPeer.InsertTxHeader(i, &tx1)
+		val, err = ctxPeer.UpdateAppDataPeer(i, &tx1)
+		if !val {
+			tester.Fatal("could not update tx in the peer:"+*err, ctx.txModel)
+		}
+		val, err = ctxPeer.InsertTxHeader(i, &tx1)
+		if !val {
+			tester.Fatal("could not insert tx header in the peer:"+*err, ctx.txModel)
+		}
 	}
 
 	val, err := ctxPeer.VerifyStoredAllTransaction()
