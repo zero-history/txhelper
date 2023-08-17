@@ -66,6 +66,35 @@ func TestClients(tester *testing.T) {
 	}
 }
 
+func TestPeers(tester *testing.T) {
+	txNum := 1
+	totalUsers := 3
+	for i := 1; i <= 6; i++ {
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
+		ctx.testPeerTransactions(txNum, tester)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
+		ctx.testPeerTransactions(txNum, tester)
+	}
+
+	txNum = 10
+	totalUsers = 3
+	for i := 1; i <= 6; i++ {
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
+		ctx.testPeerTransactions(txNum, tester)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
+		ctx.testPeerTransactions(txNum, tester)
+	}
+
+	txNum = 10
+	totalUsers = 10
+	for i := 1; i <= 6; i++ {
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1)
+		ctx.testPeerTransactions(txNum, tester)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1)
+		ctx.testPeerTransactions(txNum, tester)
+	}
+}
+
 func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 	var txBytes []byte
 	var tx *Transaction
@@ -113,33 +142,79 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 	}
 }
 
-func TestPeers(tester *testing.T) {
-	txNum := 1
-	totalUsers := 3
-	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
-		ctx.testPeerTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
-		ctx.testPeerTransactions(txNum, tester)
-	}
-
-	txNum = 10
-	totalUsers = 3
-	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
-		ctx.testPeerTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
-		ctx.testPeerTransactions(txNum, tester)
-	}
-
-	txNum = 10
-	totalUsers = 10
+func TestPeersBatch(tester *testing.T) {
+	txNum := 10
+	totalUsers := 10
 	for i := 1; i <= 6; i++ {
 		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1)
-		ctx.testPeerTransactions(txNum, tester)
+		ctx.testPeerBatchTransactions(txNum, tester)
 		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1)
-		ctx.testPeerTransactions(txNum, tester)
+		ctx.testPeerBatchTransactions(txNum, tester)
 	}
+}
+
+func (ctx *ExeContext) testPeerBatchTransactions(num int, tester *testing.T) {
+	var txBytes []byte
+	batchSize := 3
+	tx := make([]*Transaction, batchSize)
+	tx1 := make([]Transaction, batchSize)
+
+	rand.NewSource(0)
+
+	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
+	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
+
+	for i := 0; i < num; i++ {
+
+		for j := 0; j < batchSize; j++ {
+			tx[j] = ctxClient.RandomTransaction()
+
+			val, err := ctxClient.VerifyIncomingTransaction(tx[j])
+			if !val {
+				tester.Fatal("invalid transaction conversion in the client:"+*err, ctx.txModel)
+			}
+
+			val, errM := ctxClient.UpdateAppDataClient(&tx[j].Data)
+			if !val {
+				tester.Fatal("invalid transaction conversion in the client:"+errM.Error(), ctx.txModel)
+			}
+		}
+
+		for j := 0; j < batchSize; j++ {
+			txBytes = ctxClient.ToBytes(tx[j])
+			ok := ctxPeer.FromBytes(txBytes, &tx1[j])
+			if !ok {
+				tester.Fatal("couldn't parse tx:", ctxPeer.txModel, ctxPeer.sigContext)
+			}
+
+			val, err := ctxPeer.VerifyIncomingTransactionWithTemp(&tx1[j])
+			if !val {
+				tester.Fatal("invalid transaction in the peer:"+*err, ctx.txModel, i, j)
+			}
+
+			val, err = ctxPeer.UpdateAppDataPeerToTemp(i*batchSize+j, &tx1[j])
+			if !val {
+				tester.Fatal("could not update tx in the peer:"+*err, ctx.txModel, i, j)
+			}
+		}
+
+		for j := 0; j < batchSize; j++ {
+			val, err := ctxPeer.UpdateAppDataPeer(i*batchSize+j, &tx1[j])
+			if !val {
+				tester.Fatal("could not update tx in the peer:"+*err, ctx.txModel)
+			}
+			val, err = ctxPeer.InsertTxHeader(i*batchSize+j, &tx1[j])
+			if !val {
+				tester.Fatal("could not insert tx header in the peer:"+*err, ctx.txModel)
+			}
+		}
+	}
+
+	val, err := ctxPeer.VerifyStoredAllTransaction()
+	if !val {
+		tester.Fatal("invalid blockchain was created:", ctxPeer.txModel, *err)
+	}
+
 }
 
 // This a sample benchmark

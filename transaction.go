@@ -43,17 +43,15 @@ func (ctx *ExeContext) RandomTransaction() *Transaction {
 	return tx
 }
 
-// VerifyIncomingTransaction verifies a raw transaction
-func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string) {
-	if ctx.uType == 2 {
-		_, err := ctx.PrepareAppDataPeer(&tx.Data)
-		if err != nil {
-			errM := err.Error()
-			return false, &errM
-		}
-	} else if ctx.uType == 1 {
-		ctx.PrepareAppDataClient(&tx.Data)
-	}
+func (ctx *ExeContext) FixedTransaction(inSize uint8, outSize uint8) *Transaction {
+	// variable sizes
+	var tx = new(Transaction)
+	ctx.RandomAppData(&tx.Data, inSize, outSize, ctx.payloadSize)
+	ctx.CreateTxHeader(&tx.Txh, &tx.Data)
+	return tx
+}
+
+func (ctx *ExeContext) checkUniqueness(tx *Transaction) (bool, *string) {
 	// unique headers
 	for j := 0; j < len(tx.Data.Inputs); j++ {
 		for l := j + 1; l < len(tx.Data.Inputs); l++ {
@@ -91,6 +89,54 @@ func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string
 			}
 		}
 	}
+	return true, nil
+}
+
+// VerifyIncomingTransaction verifies a raw transaction
+func (ctx *ExeContext) VerifyIncomingTransaction(tx *Transaction) (bool, *string) {
+	if ctx.uType == 2 {
+		_, err := ctx.PrepareAppDataPeer(&tx.Data)
+		if err != nil {
+			errM := err.Error()
+			return false, &errM
+		}
+	} else if ctx.uType == 1 {
+		_, err := ctx.PrepareAppDataClient(&tx.Data)
+		if err != nil {
+			errM := err.Error()
+			return false, &errM
+		}
+	}
+
+	ok, err := ctx.checkUniqueness(tx)
+	if !ok {
+		return false, err
+	}
+
+	return ctx.VerifyTxHeader(&tx.Txh, &tx.Data)
+}
+
+// VerifyIncomingTransactionWithTemp verifies a raw transaction including temps
+func (ctx *ExeContext) VerifyIncomingTransactionWithTemp(tx *Transaction) (bool, *string) {
+	if ctx.uType == 2 {
+		_, err := ctx.PrepareAppDataPeerWithTemps(&tx.Data)
+		if err != nil {
+			errM := err.Error()
+			return false, &errM
+		}
+	} else if ctx.uType == 1 {
+		_, err := ctx.PrepareAppDataClient(&tx.Data)
+		if err != nil {
+			errM := err.Error()
+			return false, &errM
+		}
+	}
+
+	ok, err := ctx.checkUniqueness(tx)
+	if !ok {
+		return false, err
+	}
+
 	return ctx.VerifyTxHeader(&tx.Txh, &tx.Data)
 }
 

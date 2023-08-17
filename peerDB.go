@@ -3,6 +3,7 @@ package txhelper
 import "C"
 import (
 	"bytes"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	_ "github.com/mattn/go-sqlite3"
@@ -17,6 +18,12 @@ import (
 // #include <stdint.h>
 // #include <openssl/bn.h>
 import "C"
+
+type TempUser struct {
+	u     User
+	used  int // for origami-header identifier
+	txNum int
+}
 
 func inttoByte4(a int, bytes []byte) {
 	bytes[0] = uint8(a & 0xff)
@@ -131,6 +138,25 @@ func (ctx *ExeContext) initPeerDB() (bool, error) {
 	return true, nil
 }
 
+func getHeaderMapKey(h []byte) [32]byte {
+	var key [32]byte
+	for i := 0; i < sha256.Size; i++ {
+		key[i] = h[i]
+	}
+	return key
+}
+
+func getPKMapKey(pk []byte, size int) [128]byte {
+	var key [128]byte
+	for i := 0; i < size; i++ {
+		key[i] = pk[i]
+	}
+	for i := size; i < 128; i++ {
+		key[i] = 0
+	}
+	return key
+}
+
 // insertPeerOut enter an outputdata. For Origami, give txn as well.
 func (ctx *ExeContext) insertPeerOut(id int, h []byte, out *OutputData, sig []byte) (bool, error) {
 
@@ -160,6 +186,77 @@ func (ctx *ExeContext) insertPeerOut(id int, h []byte, out *OutputData, sig []by
 		}
 	}
 	return true, nil
+}
+
+// insertTempPeerOut enter an outputdata to the temp user in a way that it can be easily added to the DB later. For Origami, give txn as well.
+func (ctx *ExeContext) insertTempPeerOut(id int, h []byte, out *OutputData, sig []byte, txNum int) (bool, error) {
+	usedH, _ := ctx.usedPeerOutHeader(h)
+
+	if usedH {
+		return false, errors.New("TXHELPER_DUPLICATE_OUTPUTS")
+	}
+
+	if ctx.txModel == 6 {
+		usedPK, _ := ctx.usedPeerOutPublicKey(h)
+
+		if usedPK { // somebody is trying to replace already used pk in a later transactions
+			return false, errors.New("TXHELPER_DUPLICATE_PK")
+		}
+
+		usedTxNum, foundPk := ctx.TempPKs[getPKMapKey(out.Pk, int(ctx.sigContext.PkSize))]
+		// somebody is trying to replace already used pk in a later transactions
+		if foundPk {
+			if usedTxNum <= txNum {
+				return false, errors.New("TXHELPER_DUPLICATE_PK")
+			}
+			ctx.TempPKs[getPKMapKey(out.Pk, int(ctx.sigContext.PkSize))] = txNum
+		}
+	}
+
+	header := getHeaderMapKey(h)
+
+	tempUser, found := ctx.TempUsers[header]
+	// somebody is trying to replace already used output in a later transactions
+	if found {
+		if tempUser.txNum <= txNum {
+			return false, errors.New("TXHELPER_DUPLICATE_OUTPUTS")
+		}
+		// delete ctx.TempUsers[tempIndex]
+		delete(ctx.TempUsers, header)
+	}
+
+	tempUser.u.id = id
+	tempUser.u.H = make([]byte, sha256.Size)
+	copy(tempUser.u.H, h)
+	tempUser.u.Keys = make([]byte, ctx.sigContext.PkSize)
+	copy(tempUser.u.Keys, out.Pk)
+	tempUser.u.N = out.N
+	tempUser.u.Data = make([]byte, ctx.payloadSize)
+	copy(tempUser.u.Data, out.Data)
+	tempUser.used = 0
+	tempUser.txNum = txNum
+	if ctx.txModel == 6 {
+		tempUser.u.sig = make([]byte, ctx.sigContext.SigSize)
+		copy(tempUser.u.sig, sig)
+		tempUser.u.Txns = make([]int, len(out.u.Txns))
+		for i := 0; i < len(out.u.Txns); i++ {
+			tempUser.u.Txns[i] = out.u.Txns[i]
+		}
+	}
+	ctx.TempUsers[header] = tempUser
+	if ctx.TempUsers[header].u.id != id {
+		log.Fatal("temp user was not updated correctly")
+	}
+	return true, nil
+}
+
+// deleteTempOutputs deletes all outputdata created on or before txNum
+func (ctx *ExeContext) deleteTempOutputs(txNum int) {
+	for header, tempUser := range ctx.TempUsers {
+		if tempUser.txNum <= txNum {
+			delete(ctx.TempUsers, header)
+		}
+	}
 }
 
 // deletePeerOut deletes an output from id
@@ -211,6 +308,44 @@ func (ctx *ExeContext) updatePeerOut(id int, h []byte, n int, data []byte, sig [
 	return true, nil
 }
 
+// updateTempPeerOut only updates used in (1-4). for 6: updates " n = ?, data = ?, sig = ?, used = ?"
+func (ctx *ExeContext) updateTempPeerOut(h []byte, newh []byte, n int, data []byte, sig []byte, txns []int, used int, txNum int) (bool, error) {
+	header := getHeaderMapKey(h)
+	tempUser, found := ctx.TempUsers[header]
+	// somebody is trying to update not-found or out-of-sequence outputs
+	if !found {
+		foundDB, idDB, usedDB, _ := ctx.getPeerOut(h, &tempUser.u)
+		if !foundDB {
+			return false, errors.New("TXHELPER_NO_FOUND_INPUT")
+		}
+		if usedDB == 1 {
+			return false, errors.New("TXHELPER_REUSED_INPUT")
+		}
+		tempUser.u.id = idDB
+	}
+
+	if ctx.txModel >= 1 && ctx.txModel <= 4 {
+		tempUser.used = used
+		ctx.TempUsers[header] = tempUser
+	} else if ctx.txModel == 5 {
+		log.Fatal("no need")
+	} else if ctx.txModel == 6 {
+		copy(tempUser.u.H, newh)
+		tempUser.u.N = uint8(n & 0xff)
+		copy(tempUser.u.Data, data)
+		copy(tempUser.u.sig, sig)
+		tempUser.u.Txns = make([]int, len(txns))
+		for i := 0; i < len(txns); i++ {
+			tempUser.u.Txns[i] = txns[i]
+		}
+		tempUser.used = used
+		tempUser.txNum = txNum
+		ctx.TempUsers[getHeaderMapKey(newh)] = tempUser
+	}
+	ctx.TempUsers[header] = tempUser
+	return true, nil
+}
+
 func (ctx *ExeContext) usedPeerOutHeader(h []byte) (bool, int) {
 	var err error
 	id := 0
@@ -235,6 +370,7 @@ func (ctx *ExeContext) usedPeerOutPublicKey(pk []byte) (bool, int) {
 	return true, id
 }
 
+// getPeerOut returns found, id, used, err
 func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int, error) {
 	var err error
 	used := 0
@@ -268,6 +404,51 @@ func (ctx *ExeContext) getPeerOut(h []byte, out *User) (bool, int, int, error) {
 		}
 	}
 	return true, id, used, nil
+}
+
+func (ctx *ExeContext) getTempPeerOut(h []byte, out *User) (bool, int, int, error) {
+	header := getHeaderMapKey(h)
+	tempUser, found := ctx.TempUsers[header]
+
+	if !found {
+		return false, -1, -1, errors.New("TXHELPER_NO_OUTPUT")
+	}
+
+	out.id = tempUser.u.id
+	out.H = make([]byte, sha256.Size)
+	copy(out.H, tempUser.u.H)
+	out.Keys = make([]byte, ctx.sigContext.PkSize)
+	copy(out.Keys, tempUser.u.Keys)
+	out.N = tempUser.u.N
+	out.Data = make([]byte, ctx.payloadSize)
+	copy(out.Data, tempUser.u.Data)
+	if ctx.txModel == 6 {
+		out.sig = make([]byte, ctx.sigContext.SigSize)
+		copy(out.sig, tempUser.u.sig)
+		txSize := len(tempUser.u.Txns)
+		out.Txns = make([]int, txSize)
+		for i := 0; i < txSize; i++ {
+			out.Txns[i] = tempUser.u.Txns[i]
+		}
+		out.UDelta = make([]byte, txSize*33)
+		activity := make([]byte, 33)
+		for i := 0; i < txSize; i++ {
+			activity, found = ctx.TempTxH[out.Txns[i]] // check temps
+			if found {
+				copy(out.UDelta[i*33:], activity)
+				continue
+			}
+			// then check db
+			row := ctx.db.QueryRow("SELECT activity  FROM txHeaders WHERE txn = ?;", out.Txns[i])
+			err := row.Scan(&activity)
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, -1, -1, err
+			}
+			copy(out.UDelta[i*33:], activity)
+		}
+	}
+
+	return true, tempUser.u.id, tempUser.used, nil
 }
 
 func (ctx *ExeContext) getPeerOutFromID(id int, out *User) (bool, int, error) {

@@ -135,6 +135,64 @@ func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, error) {
 	return true, nil
 }
 
+// PrepareAppDataPeerWithTemps get output details for inputs using the header. Note that it also checks temporary users
+func (ctx *ExeContext) PrepareAppDataPeerWithTemps(data *AppData) (bool, error) {
+	i := 0
+	used := -1
+	foundDB := false
+	foundtemp := false
+	var err error
+	// arrange inputs
+	for i = 0; i < len(data.Inputs); i++ {
+		// first check temps
+		foundtemp, data.Inputs[i].u.id, used, err = ctx.getTempPeerOut(data.Inputs[i].Header, &data.Inputs[i].u)
+		if !foundtemp {
+			// then check db
+			foundDB, data.Inputs[i].u.id, used, err = ctx.getPeerOut(data.Inputs[i].Header, &data.Inputs[i].u)
+			if !foundDB {
+				fmt.Println("not found:", data.Inputs[i].Header[:5])
+				for h, user := range ctx.TempUsers {
+					fmt.Println(h[:5], user.u.Keys[:5])
+				}
+				return false, err
+			}
+		}
+
+		if used != 0 {
+			return false, errors.New("TXHELPER_REUSED_IN" + err.Error())
+		}
+
+		// copy public key
+		if i < len(data.Inputs) && (ctx.txModel == 2 || ctx.txModel == 4 || ctx.txModel == 6) {
+			data.Outputs[i].Pk = make([]byte, ctx.sigContext.PkSize)
+			copy(data.Outputs[i].Pk, data.Inputs[i].u.Keys)
+			data.Outputs[i].N = data.Inputs[i].u.N + 1
+		}
+	}
+
+	// arrange ids of outputs for txHeader insertion
+	if ctx.txModel >= 1 && ctx.txModel <= 4 {
+		for i = 0; i < len(data.Outputs); i++ {
+			data.Outputs[i].u.id = ctx.CurrentOutputsWithTemp + i // must save every output with new id
+		}
+	} else if ctx.txModel == 5 {
+		for i = 0; i < len(data.Outputs); i++ {
+			data.Outputs[i].u.id = ctx.outputPointer // must save every output with new id even though input ids will be deleted
+			ctx.outputPointer++
+		}
+	} else if ctx.txModel == 6 { // must save every new output pk with new id
+		j := 0
+		for i = len(data.Inputs); i < len(data.Outputs); i++ {
+			data.Outputs[i].u.id = ctx.CurrentUsersWithTemp + j // must save every new pk (user) with new id
+			j++
+		}
+	} else {
+		log.Fatal("unknown txModel:", ctx.txModel)
+	}
+
+	return true, nil
+}
+
 // UpdateAppDataClient update user details for new app data changes
 func (ctx *ExeContext) UpdateAppDataClient(data *AppData) (bool, error) {
 	i := 0
@@ -173,7 +231,7 @@ func (ctx *ExeContext) UpdateAppDataClient(data *AppData) (bool, error) {
 }
 
 // UpdateAppDataPeer update output details for new app data changes
-func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) (bool, *string) {
+func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *string) {
 	i := 0
 	header := make([]byte, sha256.Size)
 	var errM string
@@ -248,7 +306,7 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) (bool, *strin
 		for i = 0; i < len(tx.Data.Inputs); i++ {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
-				tx.Data.Inputs[i].u.Txns = append(tx.Data.Inputs[i].u.Txns, txn)
+				tx.Data.Inputs[i].u.Txns = append(tx.Data.Inputs[i].u.Txns, txNum)
 				ok, err := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, header, int(tx.Data.Outputs[i].N), tx.Data.Outputs[i].Data, tx.Txh.Kyber[i], tx.Data.Inputs[i].u.Txns, 0)
 				if !ok {
 					errM = "I couldn't update the input" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
@@ -257,21 +315,124 @@ func (ctx *ExeContext) UpdateAppDataPeer(txn int, tx *Transaction) (bool, *strin
 			} else {
 				log.Fatal("unknown sigType:", ctx.sigContext.SigType)
 			}
+			//fmt.Println("updated:", tx.Data.Inputs[i].u.id, tx.Data.Outputs[i].Pk[:5], tx.Data.Inputs[i].u.Txns, txNum, tx.Txh.activityProof)
 		}
 		// save new outputs
 		for i = len(tx.Data.Inputs); i < len(tx.Data.Outputs); i++ {
 			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			tx.Data.Outputs[i].u.Txns = make([]int, 1)
-			tx.Data.Outputs[i].u.Txns[0] = txn
+			tx.Data.Outputs[i].u.Txns[0] = txNum
 			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], tx.Txh.Kyber[i])
 			if !ok {
 				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
 			}
+			//fmt.Println("inserted:", txNum, tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].Pk[:5], tx.Data.Outputs[i].u.Txns, tx.Txh.activityProof)
 		}
 		ctx.CurrentUsers += len(tx.Data.Outputs) - len(tx.Data.Inputs)
 		ctx.CurrentOutputs += len(tx.Data.Outputs) - len(tx.Data.Inputs)
 		ctx.DeletedOutputs += len(tx.Data.Inputs)
+	}
+	// delete old outputs from temps
+	ctx.deleteTempOutputs(txNum)
+	delete(ctx.TempTxH, txNum)
+	return true, nil
+}
+
+// UpdateAppDataPeerToTemp update output details for new app data changes
+func (ctx *ExeContext) UpdateAppDataPeerToTemp(txNum int, tx *Transaction) (bool, *string) {
+	i := 0
+	header := make([]byte, sha256.Size)
+	var errM string
+	// utxo
+	if ctx.txModel == 1 || ctx.txModel == 3 {
+		for i = 0; i < len(tx.Data.Inputs); i++ {
+			ok, err := ctx.updateTempPeerOut(tx.Data.Inputs[i].Header, tx.Data.Inputs[i].Header, 0, nil, nil, nil, 1, txNum) // update "used"
+			if !ok && errors.Is(err, errors.New("TXHELPER_DUPLICATE_OUTPUTS")) {
+				errM = "invalid temp update:" + err.Error()
+				return false, &errM
+			}
+		}
+		// save outputs
+		for i = 0; i < len(tx.Data.Outputs); i++ {
+			//update client db with new data
+			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil, txNum)
+			if !ok {
+				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
+		}
+		ctx.CurrentOutputsWithTemp += len(tx.Data.Outputs)
+	}
+	// account
+	if ctx.txModel == 2 || ctx.txModel == 4 {
+		// modify inputs' into ``used'' inputs
+		for i = 0; i < len(tx.Data.Inputs); i++ {
+			// only update temps
+			ok, err := ctx.updateTempPeerOut(tx.Data.Inputs[i].Header, tx.Data.Inputs[i].Header, 0, nil, nil, nil, 1, txNum) // update "used"
+			if !ok && errors.Is(err, errors.New("TXHELPER_DUPLICATE_OUTPUTS")) {
+				errM = "invalid temp update:" + err.Error()
+				return false, &errM
+			}
+		}
+		// save outputs
+		for i = 0; i < len(tx.Data.Outputs); i++ {
+			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil, txNum)
+			if !ok {
+				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
+		}
+		ctx.CurrentUsersWithTemp += len(tx.Data.Outputs) - len(tx.Data.Inputs) // update the current user size
+		ctx.CurrentOutputsWithTemp += len(tx.Data.Outputs)                     // update the current output number
+	} else if ctx.txModel == 5 {
+		// do not delete inputs with temp update
+		// save outputs
+		for i = 0; i < len(tx.Data.Outputs); i++ {
+			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil, txNum)
+			if !ok {
+				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
+		}
+		ctx.CurrentOutputsWithTemp += len(tx.Data.Outputs) - len(tx.Data.Inputs)
+	} else if ctx.txModel == 6 {
+		// modify inputs (h, -, data, n, sig) including "used"
+		for i = 0; i < len(tx.Data.Inputs); i++ {
+			tx.Data.Inputs[i].u.H = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
+				txns := append(tx.Data.Inputs[i].u.Txns, txNum)
+				// instead use previous header
+				ok, err := ctx.updateTempPeerOut(tx.Data.Inputs[i].Header, tx.Data.Inputs[i].u.H, int(tx.Data.Outputs[i].N), tx.Data.Outputs[i].Data, tx.Txh.Kyber[i], txns, 0, txNum)
+				if !ok {
+					errM = "I couldn't update the input" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
+					return false, &errM
+				}
+			} else {
+				log.Fatal("unknown sigType:", ctx.sigContext.SigType)
+			}
+			//fmt.Println("updated temp:", txNum, tx.Data.Outputs[i].Pk[:5], tx.Data.Inputs[i].Header[:5], tx.Data.Inputs[i].u.H)
+		}
+		// save new outputs
+		for i = len(tx.Data.Inputs); i < len(tx.Data.Outputs); i++ {
+			tx.Data.Outputs[i].u.H = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			tx.Data.Outputs[i].u.Txns = make([]int, 1)
+			tx.Data.Outputs[i].u.Txns[0] = txNum
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].u.H, &tx.Data.Outputs[i], tx.Txh.Kyber[i], txNum)
+			if !ok {
+				errM = "I couldn't add the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
+				return false, &errM
+			}
+			//fmt.Println("insert temp:", txNum, tx.Data.Outputs[i].Pk[:5], tx.Data.Outputs[i].u.H[:5], tx.Data.Outputs[i].u.Txns)
+		}
+		// save txH
+		ctx.TempTxH[txNum] = tx.Txh.activityProof
+
+		ctx.CurrentUsersWithTemp += len(tx.Data.Outputs) - len(tx.Data.Inputs)
+		ctx.CurrentOutputsWithTemp += len(tx.Data.Outputs) - len(tx.Data.Inputs)
 	}
 	return true, nil
 }

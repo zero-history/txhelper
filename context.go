@@ -1,6 +1,7 @@
 package txhelper
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"go.dedis.ch/kyber/v3/util/key"
@@ -26,17 +27,23 @@ type ExeContext struct {
 	averageOutputMax uint8  // average number of outputs  will be in [0, averageOutputMax]
 	distributionType int    // output Data size distribution
 
-	TotalUsers  int // total number of users represented if this is a client
-	TotalTx     int // total number of transactions if this is a peer
-	TotalBlock  int // total number of blocks  if this is a peer
-	maxBlockTxs int // maximum number of transactions included in a blocks, so the users will not use the same inputs
+	TotalUsers     int // total number of users represented if this is a client
+	TotalTx        int // total number of transactions if this is a peer
+	TotalBlock     int // total number of blocks  if this is a peer
+	TotalTempUsers int // maximum number of temp users
 
-	inputPointer   int // inputs are chosen from round-robin method
-	outputPointer  int // inputs are chosen from round-robin method
-	CurrentUsers   int
-	CurrentOutputs int // in Origami, CurrentUsers = CurrentOutputs
-	DeletedOutputs int //
-	groupContext   key.Suite
+	TempUsers map[[sha256.Size]byte]TempUser
+	TempPKs   map[[128]byte]int
+	TempTxH   map[int][]byte // only used for origami accounts
+
+	inputPointer           int // inputs are chosen from round-robin method
+	outputPointer          int // inputs are chosen from round-robin method
+	CurrentUsers           int
+	CurrentUsersWithTemp   int
+	CurrentOutputs         int // in Origami, CurrentUsers = CurrentOutputs
+	CurrentOutputsWithTemp int // in Origami, CurrentUsers = CurrentOutputs
+	DeletedOutputs         int //
+	groupContext           key.Suite
 
 	bnQ   *C.BIGNUM
 	bnCtx *C.BN_CTX
@@ -50,22 +57,27 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	ctx := ExeContext{
-		exeId:            exeId,
-		uType:            uType,
-		txModel:          txType,
-		payloadSize:      averageSize,
-		averageInputMax:  averageInputMax,
-		averageOutputMax: averageOutputMax,
-		distributionType: distributionType,
-		TotalUsers:       totalUsers,
-		TotalBlock:       0,
-		TotalTx:          0,
-		inputPointer:     0,
-		outputPointer:    0,
-		CurrentUsers:     0,
-		CurrentOutputs:   0,
-		DeletedOutputs:   0,
-		maxBlockTxs:      10, // todo change
+		exeId:                  exeId,
+		uType:                  uType,
+		txModel:                txType,
+		payloadSize:            averageSize,
+		averageInputMax:        averageInputMax,
+		averageOutputMax:       averageOutputMax,
+		distributionType:       distributionType,
+		TotalUsers:             totalUsers,
+		TotalBlock:             0,
+		TotalTx:                0,
+		inputPointer:           0,
+		outputPointer:          0,
+		CurrentUsers:           0,
+		CurrentUsersWithTemp:   0,
+		CurrentOutputs:         0,
+		CurrentOutputsWithTemp: 0,
+		DeletedOutputs:         0,
+		TotalTempUsers:         10,
+		TempUsers:              make(map[[sha256.Size]byte]TempUser),
+		TempPKs:                make(map[[128]byte]int),
+		TempTxH:                make(map[int][]byte),
 	}
 
 	// generate group context
