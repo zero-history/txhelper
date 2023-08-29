@@ -3,7 +3,6 @@ package txhelper
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,6 +111,11 @@ func (ctx *ExeContext) PrepareAppDataPeer(data *AppData) (bool, error) {
 		}
 	}
 
+	for i = 0; i < len(data.Outputs); i++ {
+		//update client db with new data
+		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
+	}
+
 	// arrange ids of outputs for txHeader insertion
 	if ctx.txModel >= 1 && ctx.txModel <= 4 {
 		for i = 0; i < len(data.Outputs); i++ {
@@ -168,6 +172,11 @@ func (ctx *ExeContext) PrepareAppDataPeerWithTemps(data *AppData) (bool, error) 
 			copy(data.Outputs[i].Pk, data.Inputs[i].u.Keys)
 			data.Outputs[i].N = data.Inputs[i].u.N + 1
 		}
+	}
+
+	for i = 0; i < len(data.Outputs); i++ {
+		//update client db with new data
+		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
 
 	// arrange ids of outputs for txHeader insertion
@@ -233,7 +242,7 @@ func (ctx *ExeContext) UpdateAppDataClient(data *AppData) (bool, error) {
 // UpdateAppDataPeer update output details for new app data changes
 func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *string) {
 	i := 0
-	header := make([]byte, sha256.Size)
+	//header := make([]byte, sha256.Size)
 	var errM string
 	// utxo
 	if ctx.txModel == 1 || ctx.txModel == 3 {
@@ -247,8 +256,8 @@ func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *str
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
 			//update client db with new data
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], nil)
 			if !ok {
 				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
@@ -272,8 +281,8 @@ func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *str
 		}
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], nil)
 			if !ok {
 				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
@@ -292,8 +301,8 @@ func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *str
 		}
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], nil)
 			if !ok {
 				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
@@ -304,10 +313,10 @@ func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *str
 	} else if ctx.txModel == 6 {
 		// modify inputs (h, -, data, n, sig) including "used"
 		for i = 0; i < len(tx.Data.Inputs); i++ {
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			if ctx.sigContext.SigType == 1 || ctx.sigContext.SigType == 2 {
 				tx.Data.Inputs[i].u.Txns = append(tx.Data.Inputs[i].u.Txns, txNum)
-				ok, err := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, header, int(tx.Data.Outputs[i].N), tx.Data.Outputs[i].Data, tx.Txh.Kyber[i], tx.Data.Inputs[i].u.Txns, 0)
+				ok, err := ctx.updatePeerOut(tx.Data.Inputs[i].u.id, tx.Data.Outputs[i].header, int(tx.Data.Outputs[i].N), tx.Data.Outputs[i].Data, tx.Txh.Kyber[i], tx.Data.Inputs[i].u.Txns, 0)
 				if !ok {
 					errM = "I couldn't update the input" + string(rune(tx.Data.Inputs[i].u.id)) + " " + err.Error()
 					return false, &errM
@@ -319,10 +328,10 @@ func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *str
 		}
 		// save new outputs
 		for i = len(tx.Data.Inputs); i < len(tx.Data.Outputs); i++ {
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
 			tx.Data.Outputs[i].u.Txns = make([]int, 1)
 			tx.Data.Outputs[i].u.Txns[0] = txNum
-			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], tx.Txh.Kyber[i])
+			ok, err := ctx.insertPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], tx.Txh.Kyber[i])
 			if !ok {
 				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
@@ -342,7 +351,7 @@ func (ctx *ExeContext) UpdateAppDataPeer(txNum int, tx *Transaction) (bool, *str
 // UpdateAppDataPeerToTemp update output details for new app data changes
 func (ctx *ExeContext) UpdateAppDataPeerToTemp(txNum int, tx *Transaction) (bool, *string) {
 	i := 0
-	header := make([]byte, sha256.Size)
+	//header := make([]byte, sha256.Size)
 	var errM string
 	// utxo
 	if ctx.txModel == 1 || ctx.txModel == 3 {
@@ -356,8 +365,8 @@ func (ctx *ExeContext) UpdateAppDataPeerToTemp(txNum int, tx *Transaction) (bool
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
 			//update client db with new data
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil, txNum)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], nil, txNum)
 			if !ok {
 				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
@@ -378,8 +387,8 @@ func (ctx *ExeContext) UpdateAppDataPeerToTemp(txNum int, tx *Transaction) (bool
 		}
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil, txNum)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], nil, txNum)
 			if !ok {
 				errM = "I couldn't update the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM
@@ -391,8 +400,8 @@ func (ctx *ExeContext) UpdateAppDataPeerToTemp(txNum int, tx *Transaction) (bool
 		// do not delete inputs with temp update
 		// save outputs
 		for i = 0; i < len(tx.Data.Outputs); i++ {
-			header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
-			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, header, &tx.Data.Outputs[i], nil, txNum)
+			//header = ctx.computeOutIdentifier(tx.Data.Outputs[i].Pk, tx.Data.Outputs[i].N, tx.Data.Outputs[i].Data)
+			ok, err := ctx.insertTempPeerOut(tx.Data.Outputs[i].u.id, tx.Data.Outputs[i].header, &tx.Data.Outputs[i], nil, txNum)
 			if !ok {
 				errM = "I couldn't insert the output" + string(rune(tx.Data.Outputs[i].u.id)) + " " + err.Error()
 				return false, &errM

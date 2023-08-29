@@ -32,7 +32,7 @@ TxHelper supports the following transaction 6 models.
 | Classic Accountable UTXO (3)     | Non-Zero-History | Signatures of input + output owners                | Schnorr, Aggregated BLS        |
 | Classic Accountable Accounts (4) | Non-Zero-History | Signatures of input + output owners                | Schnorr, Aggregated BLS        |
 | Origami UTXO (5)                 | Zero-History     | Activity-proof, excess and a difference-signature  | Schnorr, BLS                   |
-| Origami Accounts (6)             | Zero-History     | Activity-proof and signatures of all output owners | Schnorr, Aggregated BLS        |
+| Origami Accounts (6)             | Zero-History     | Activity-proof and signatures of all output owners | Schnorr, BLS                   |
 
 ### Application Simulation
 
@@ -67,10 +67,10 @@ Digital signatures (or some unforgeable proofs) are required to verify that the 
 Hence, digital signature has a significant impact on blockchain performance. TxHelper currently supports two digital signatures,
 Schnorr signatures and aggregated BLS signatures.
 
-| Signature      | Public Key Size | Signature Size | Public Aggregation | Verification Time        |
-|----------------|-----------------|----------------|--------------------|--------------------------|
-| Schnorr        | 32              | 64             | No                 | O(number of public keys) |
-| Aggregated BLS | 128             | 32             | Yes                | O(number of public keys) | 
+| Signature          | Public Key Size | Signature Size | Public Aggregation | Verification Time        |
+|--------------------|-----------------|----------------|--------------------|--------------------------|
+| Schnorr (1)        | 32              | 64             | No                 | O(number of public keys) |
+| Aggregated BLS (2) | 128             | 32             | Yes                | O(number of public keys) | 
 
 
 Even though BLS signatures are shorter and can be aggregated, they typically take more time for verification.
