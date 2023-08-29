@@ -3,6 +3,7 @@ package txhelper
 import (
 	"crypto/sha256"
 	"database/sql"
+	"fmt"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"go.dedis.ch/kyber/v3/util/key"
 	"go.dedis.ch/kyber/v3/xof/blake2xb"
@@ -49,11 +50,13 @@ type ExeContext struct {
 	bnCtx *C.BN_CTX
 	bnOne []byte
 
+	enableIndexing bool
+
 	db *sql.DB // sqlite database
 }
 
 func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uint16, totalUsers int,
-	averageInputMax uint8, averageOutputMax uint8, distributionType int) ExeContext {
+	averageInputMax uint8, averageOutputMax uint8, distributionType int, enableIndexing bool) ExeContext {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	ctx := ExeContext{
@@ -78,6 +81,7 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 		TempUsers:              make(map[[sha256.Size]byte]TempUser),
 		TempPKs:                make(map[[128]byte]int),
 		TempTxH:                make(map[int][]byte),
+		enableIndexing:         enableIndexing,
 	}
 
 	// generate group context
@@ -129,4 +133,17 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 	}
 
 	return ctx
+}
+
+func (ctx *ExeContext) PrintDetails() {
+	fmt.Println("tx model:", ctx.txModel)
+	fmt.Println("sig type:", ctx.sigContext.SigType)
+	fmt.Println("payload size:", ctx.payloadSize)
+	fmt.Println("input max:", ctx.averageInputMax)
+	fmt.Println("output max:", ctx.averageOutputMax)
+	fmt.Println("transactions:", ctx.TotalTx)
+	fmt.Println("users:", ctx.CurrentUsers)
+	fmt.Println("outputs:", ctx.CurrentOutputs)
+	fmt.Println("users with temp:", ctx.CurrentUsersWithTemp)
+	fmt.Println("outputs with temp:", ctx.CurrentOutputsWithTemp)
 }

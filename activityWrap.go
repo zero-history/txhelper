@@ -13,7 +13,7 @@ import (
 
 // We use OpenSSL/BN, hence this only tests the cgo code.
 func privateCtestWrap() bool {
-	ctx := NewContext(100, 1, 5, 1, 32, 3, 2, 3, 1)
+	ctx := NewContext(100, 1, 5, 1, 32, 3, 2, 3, 1, false)
 	a := make([]byte, 33)
 	b := make([]byte, 33)
 	expectedC := make([]byte, 33)

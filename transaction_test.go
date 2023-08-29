@@ -41,27 +41,27 @@ func TestClients(tester *testing.T) {
 	txNum := 1
 	totalUsers := 3
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1, false)
 		ctx.testClientTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1, false)
 		ctx.testClientTransactions(txNum, tester)
 	}
 
 	txNum = 10
 	totalUsers = 3
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1, false)
 		ctx.testClientTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1, false)
 		ctx.testClientTransactions(txNum, tester)
 	}
 
 	txNum = 10
 	totalUsers = 10
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1, false)
 		ctx.testClientTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1, false)
 		ctx.testClientTransactions(txNum, tester)
 	}
 }
@@ -70,27 +70,27 @@ func TestPeers(tester *testing.T) {
 	txNum := 1
 	totalUsers := 3
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1, false)
 		ctx.testPeerTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1, false)
 		ctx.testPeerTransactions(txNum, tester)
 	}
 
 	txNum = 10
 	totalUsers = 3
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 2, 3, 1, false)
 		ctx.testPeerTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 2, 3, 1, false)
 		ctx.testPeerTransactions(txNum, tester)
 	}
 
 	txNum = 10
 	totalUsers = 10
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1, false)
 		ctx.testPeerTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1, false)
 		ctx.testPeerTransactions(txNum, tester)
 	}
 }
@@ -102,8 +102,8 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 
 	rand.NewSource(0)
 
-	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
-	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
+	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing)
+	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing)
 
 	for i := 0; i < num; i++ {
 		tx = ctxClient.RandomTransaction()
@@ -146,9 +146,9 @@ func TestPeersBatch(tester *testing.T) {
 	txNum := 10
 	totalUsers := 10
 	for i := 1; i <= 6; i++ {
-		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1)
+		ctx := NewContext(100, 1, i, 1, 32, totalUsers, 4, 5, 1, false)
 		ctx.testPeerBatchTransactions(txNum, tester)
-		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1)
+		ctx = NewContext(100, 1, i, 2, 32, totalUsers, 4, 5, 1, false)
 		ctx.testPeerBatchTransactions(txNum, tester)
 	}
 }
@@ -161,8 +161,8 @@ func (ctx *ExeContext) testPeerBatchTransactions(num int, tester *testing.T) {
 
 	rand.NewSource(0)
 
-	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
-	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType)
+	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing)
+	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing)
 
 	for i := 0; i < num; i++ {
 
@@ -221,11 +221,13 @@ func (ctx *ExeContext) testPeerBatchTransactions(num int, tester *testing.T) {
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers(tester *testing.B) {
 	txNum := 100
 	totalUsers := 100
-	testRandomTransactionPeer(1, txNum, totalUsers, tester)
-	testRandomTransactionPeer(2, txNum, totalUsers, tester)
+	testRandomTransactionPeer(1, txNum, totalUsers, tester, false)
+	testRandomTransactionPeer(2, txNum, totalUsers, tester, false)
+	testRandomTransactionPeer(1, txNum, totalUsers, tester, true)
+	testRandomTransactionPeer(2, txNum, totalUsers, tester, true)
 }
 
-func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester *testing.B) {
+func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester *testing.B, enableIndexing bool) {
 	var txBytes []byte
 	var tx *Transaction
 	var tx1 Transaction
@@ -238,8 +240,8 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 		averageUpdateTime := time.Duration(0)
 		rand.NewSource(0)
 
-		ctxClient := NewContext(100+txType, 1, txType, sigType, 32, totalUsers, 4, 5, 1)
-		ctxPeer := NewContext(100+txType, 2, txType, sigType, 32, totalUsers, 4, 5, 1)
+		ctxClient := NewContext(100+txType, 1, txType, sigType, 32, totalUsers, 4, 5, 1, enableIndexing)
+		ctxPeer := NewContext(100+txType, 2, txType, sigType, 32, totalUsers, 4, 5, 1, enableIndexing)
 
 		for i := 0; i < txNum; i++ {
 			tx = ctxClient.RandomTransaction()

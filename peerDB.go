@@ -61,20 +61,23 @@ func (ctx *ExeContext) initPeerDB() (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		// create an index table for h
-		statement = "DROP TABLE IF EXISTS outputs_index; " +
-			"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
-		_, err = ctx.db.Exec(statement)
-		if err != nil {
-			return false, err
-		}
-		if ctx.txModel == 2 || ctx.txModel == 4 {
-			// create an index table for pk
-			statement = "DROP INDEX IF EXISTS outputs_index2; " +
-				"CREATE INDEX outputs_index2 ON outputs (pk ASC);"
+
+		if ctx.enableIndexing {
+			// create an index table for h
+			statement = "DROP TABLE IF EXISTS outputs_index; " +
+				"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
 			_, err = ctx.db.Exec(statement)
 			if err != nil {
 				return false, err
+			}
+			if ctx.txModel == 2 || ctx.txModel == 4 {
+				// create an index table for pk
+				statement = "DROP INDEX IF EXISTS outputs_index2; " +
+					"CREATE INDEX outputs_index2 ON outputs (pk ASC);"
+				_, err = ctx.db.Exec(statement)
+				if err != nil {
+					return false, err
+				}
 			}
 		}
 	} else if ctx.txModel == 5 {
@@ -90,19 +93,22 @@ func (ctx *ExeContext) initPeerDB() (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		// create an index table for h
-		statement = "DROP INDEX IF EXISTS outputs_index; " +
-			"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
-		_, err = ctx.db.Exec(statement)
-		if err != nil {
-			return false, err
-		}
-		// create an index table for pk
-		statement = "DROP INDEX IF EXISTS outputs_index2; " +
-			"CREATE UNIQUE INDEX outputs_index2 ON outputs (pk ASC);"
-		_, err = ctx.db.Exec(statement)
-		if err != nil {
-			return false, err
+
+		if ctx.enableIndexing {
+			// create an index table for h
+			statement = "DROP INDEX IF EXISTS outputs_index; " +
+				"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
+			_, err = ctx.db.Exec(statement)
+			if err != nil {
+				return false, err
+			}
+			// create an index table for pk
+			statement = "DROP INDEX IF EXISTS outputs_index2; " +
+				"CREATE UNIQUE INDEX outputs_index2 ON outputs (pk ASC);"
+			_, err = ctx.db.Exec(statement)
+			if err != nil {
+				return false, err
+			}
 		}
 	} else if ctx.txModel == 6 {
 		// used - 0 (not used for inputs), 1 (used once), if used > 1 is invalid (used for verification)
@@ -120,19 +126,22 @@ func (ctx *ExeContext) initPeerDB() (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		// create an index table for h
-		statement = "DROP INDEX IF EXISTS outputs_index; " +
-			"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
-		_, err = ctx.db.Exec(statement)
-		if err != nil {
-			return false, err
-		}
-		// create an index table for pk
-		statement = "DROP INDEX IF EXISTS outputs_index2; " +
-			"CREATE UNIQUE INDEX outputs_index2 ON outputs (pk ASC);"
-		_, err = ctx.db.Exec(statement)
-		if err != nil {
-			return false, err
+
+		if ctx.enableIndexing {
+			// create an index table for h
+			statement = "DROP INDEX IF EXISTS outputs_index; " +
+				"CREATE UNIQUE INDEX outputs_index ON outputs (h ASC);"
+			_, err = ctx.db.Exec(statement)
+			if err != nil {
+				return false, err
+			}
+			// create an index table for pk
+			statement = "DROP INDEX IF EXISTS outputs_index2; " +
+				"CREATE UNIQUE INDEX outputs_index2 ON outputs (pk ASC);"
+			_, err = ctx.db.Exec(statement)
+			if err != nil {
+				return false, err
+			}
 		}
 	}
 	return true, nil
