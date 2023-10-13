@@ -218,7 +218,7 @@ func (ctx *ExeContext) testPeerBatchTransactions(num int, tester *testing.T) {
 }
 
 // This a sample benchmark
-func BenchmarkExeContext_VerifyStoredAllTransactionPeers(tester *testing.B) {
+func BenchmarkExeContext_VerifyStoredAllTransactionPeers2(tester *testing.B) {
 	txNum := 100
 	totalUsers := 100
 	testRandomTransactionPeer(1, txNum, totalUsers, tester, false)
@@ -240,8 +240,8 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 		averageUpdateTime := time.Duration(0)
 		rand.NewSource(0)
 
-		ctxClient := NewContext(100+txType, 1, txType, sigType, 32, totalUsers, 4, 5, 1, enableIndexing)
-		ctxPeer := NewContext(100+txType, 2, txType, sigType, 32, totalUsers, 4, 5, 1, enableIndexing)
+		ctxClient := NewContext(100+txType, 1, txType, sigType, 1024, totalUsers, 4, 5, 1, enableIndexing)
+		ctxPeer := NewContext(100+txType, 2, txType, sigType, 1024, totalUsers, 4, 5, 1, enableIndexing)
 
 		for i := 0; i < txNum; i++ {
 			tx = ctxClient.RandomTransaction()
@@ -293,10 +293,20 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, tester 
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println("verification passed:", ctxPeer.txModel, 32, timeElapsed, ctxPeer.TotalTx, ctxPeer.TotalUsers,
+			fmt.Println(ctxPeer.txModel, ctxPeer.payloadSize, timeElapsed, ctxPeer.TotalTx, ctxPeer.TotalUsers,
 				ctxPeer.CurrentUsers, ctxPeer.CurrentOutputs, ctxPeer.DeletedOutputs, averageTxSize/txNum,
 				averageTxVerTime/time.Duration(txNum), averageUpdateTime/time.Duration(txNum), float32(averageInSize)/float32(txNum),
 				float32(averageOutSize)/float32(txNum), fi.Size())
 		}
 	}
+}
+
+// This a fixed benchmark
+func BenchmarkExeContext_VerifyStoredAllTransactionPeers(tester *testing.B) {
+	txNum := 100
+	totalUsers := 100
+	testRandomTransactionPeer(1, txNum, totalUsers, tester, false)
+	testRandomTransactionPeer(2, txNum, totalUsers, tester, false)
+	testRandomTransactionPeer(1, txNum, totalUsers, tester, true)
+	testRandomTransactionPeer(2, txNum, totalUsers, tester, true)
 }

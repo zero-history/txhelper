@@ -6,6 +6,11 @@ different transaction models for consensus benchmarks easily. Currently, txHelpe
 transaction models with two digital signatures. It also allows changing application-specific data, such as the average
 payload size and the average number of inputs/outputs per transaction to simulate different applications.
 
+Run tests: ``go test``
+
+Run benchmarks: ``go test -v -bench=. -run=BenchmarkExeContext_VerifyStoredAllTransactionPeers
+``
+
 ## What is a blockchain transaction?
 Blockchains are live databases with applications. In some cases,
 the application is a decentralized bank that transfers money between users securely while
