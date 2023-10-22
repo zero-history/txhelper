@@ -389,6 +389,33 @@ func (ctx *SignatureContext) unmarshelPublicKeysFromBytes(pk *Pubkey, pkBytes []
 	}
 }
 
+func (ctx *SignatureContext) selfMultiplyPubKey(pk *Pubkey, a []byte) {
+
+	if ctx.SigType == 1 {
+		s := ctx.suite.Scalar().SetBytes(a)
+		pk.kyber = ctx.suite.Point().Mul(s, pk.kyber)
+	}
+	if ctx.SigType == 2 {
+		s := ctx.pairingSuite.G2().Scalar().SetBytes(a)
+		pk.kyber = ctx.pairingSuite.G2().Point().Mul(s, pk.kyber)
+	}
+
+}
+
+func (ctx *SignatureContext) selfMultiplyKeyPairs(kp *SigKeyPair, a []byte) {
+
+	if ctx.SigType == 1 {
+		s := ctx.suite.Scalar().SetBytes(a)
+		kp.Sk = ctx.suite.Scalar().Mul(s, kp.Sk)
+		kp.Pk = ctx.suite.Point().Base().Mul(kp.Sk, nil)
+	}
+	if ctx.SigType == 2 {
+		s := ctx.pairingSuite.G2().Scalar().SetBytes(a)
+		kp.Sk = ctx.pairingSuite.G2().Scalar().Mul(s, kp.Sk)
+		kp.Pk = ctx.pairingSuite.G2().Point().Base().Mul(kp.Sk, nil)
+	}
+}
+
 // BLSSign is an updated version of original dedis/kyber bls signing for pk-based message signing to avoid searching for duplicate msgs
 // because we already make sure that public keys are unique
 func signBLS(suite pairing.Suite, sk kyber.Scalar, pk kyber.Point, msg []byte) ([]byte, error) {

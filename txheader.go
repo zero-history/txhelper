@@ -517,13 +517,15 @@ func (ctx *ExeContext) utxoOrigamiTxHeader(txh *TxHeader, data *AppData) {
 	// create keys
 	for i := 0; i < len(data.Inputs); i++ {
 		ctx.sigContext.unmarshelKeys(&negkeys[i], data.Inputs[i].u.Keys)
+		ctx.sigContext.selfMultiplyKeyPairs(&negkeys[i], data.Inputs[i].Header)
 		negkeysP[i] = &negkeys[i]
 	}
 	// compute header
 	for i := 0; i < len(data.Outputs); i++ {
-		ctx.sigContext.unmarshelKeys(&pluskeys[i], data.Outputs[i].u.Keys)
-		keysP[i] = &pluskeys[i]
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
+		ctx.sigContext.unmarshelKeys(&pluskeys[i], data.Outputs[i].u.Keys)
+		ctx.sigContext.selfMultiplyKeyPairs(&pluskeys[i], data.Outputs[i].header)
+		keysP[i] = &pluskeys[i]
 	}
 	txh.activityProof = ctx.computeAppActivity(data) // to compute header - must be after computeOutIdentifier
 	txh.excessPK = ctx.sigContext.diffPKFromPairs(keysP, negkeysP)
@@ -553,13 +555,15 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 	// create keys
 	for i := 0; i < len(data.Inputs); i++ {
 		ctx.sigContext.unmarshelPublicKeysFromBytes(&negkeys[i], data.Inputs[i].u.Keys[:ctx.sigContext.PkSize])
+		ctx.sigContext.selfMultiplyPubKey(&negkeys[i], data.Inputs[i].Header)
 		negkeysP[i] = &negkeys[i]
 	}
 	// compute header
 	for i := 0; i < len(data.Outputs); i++ {
-		ctx.sigContext.unmarshelPublicKeysFromBytes(&pluskeys[i], data.Outputs[i].Pk)
-		keysP[i] = &pluskeys[i]
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
+		ctx.sigContext.unmarshelPublicKeysFromBytes(&pluskeys[i], data.Outputs[i].Pk)
+		ctx.sigContext.selfMultiplyPubKey(&pluskeys[i], data.Outputs[i].header)
+		keysP[i] = &pluskeys[i]
 	}
 	txh.activityProof = ctx.computeAppActivity(data) // to compute header - must be after computeOutIdentifier
 	txh.excessPK = ctx.sigContext.diffPK(keysP, negkeysP)
