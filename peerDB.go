@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"errors"
 	_ "github.com/mattn/go-sqlite3"
+	"go.dedis.ch/kyber/v3"
 	"log"
 	"strconv"
 	"unsafe"
@@ -631,7 +632,55 @@ func (ctx *ExeContext) getTxHeader(txn int, txh *TxHeader) (bool, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
+
 	return true, nil
+}
+
+// getAggregateOutData returns aggregated data for origami utxo verification
+func (ctx *ExeContext) getAggregateOutData() (bool, []byte, []byte, error) {
+	id := 0
+	used := 0
+	var out User
+	stmt, _ := ctx.db.Prepare("SELECT id, pk, n, data, used  FROM outputs;")
+	rows, err := stmt.Query()
+	if err != nil {
+		return false, nil, nil, err
+	}
+
+	temp := C.BN_new()
+	totalD := C.BN_new()
+	C.BN_bin2bn((*C.uchar)(unsafe.Pointer(&ctx.bnOne[0])), 33, temp)
+	C.BN_copy(totalD, temp)
+	var pk Pubkey
+	var totalExcess kyber.Point
+	first := 0
+	for rows.Next() {
+		err = rows.Scan(&id, &out.Keys, &out.N, &out.Data, &used)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil, nil, err
+		}
+		header := ctx.computeOutIdentifier(out.Keys, out.N, out.Data)
+
+		C.BN_bin2bn((*C.uchar)(unsafe.Pointer(&header[0])), 32, temp)
+		C.BN_mod_mul(totalD, totalD, temp, ctx.bnQ, ctx.bnCtx)
+
+		ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, out.Keys)
+		ctx.sigContext.selfMultiplyPubKey(&pk, header)
+		if first == 0 {
+			totalExcess = pk.kyber.Clone()
+			first++
+		} else {
+			totalExcess.Add(totalExcess, pk.kyber)
+		}
+	}
+	HProd := make([]byte, 33)
+	C.BN_bn2binpad(totalD, (*C.uchar)(unsafe.Pointer(&HProd[0])), 33)
+	excessBytes, err1 := totalExcess.MarshalBinary()
+	if err1 != nil {
+		return false, nil, nil, err1
+	}
+
+	return true, excessBytes, HProd, nil
 }
 
 // setActivityTable arrange db data for origami account verification

@@ -155,7 +155,7 @@ func (ctx *SignatureContext) diffSign(kps []*SigKeyPair, negkps []*SigKeyPair, d
 			aggregateSk = aggregateSk.Add(aggregateSk, kps[i].Sk)
 		}
 		if negkps != nil && len(negkps) >= 1 {
-			for i := 1; i < len(negkps); i++ {
+			for i := 0; i < len(negkps); i++ {
 				aggregateSk = aggregateSk.Sub(aggregateSk, negkps[i].Sk)
 			}
 		}
@@ -171,7 +171,7 @@ func (ctx *SignatureContext) diffSign(kps []*SigKeyPair, negkps []*SigKeyPair, d
 			aggregateSk = aggregateSk.Add(aggregateSk, kps[i].Sk)
 		}
 		if negkps != nil && len(negkps) >= 1 {
-			for i := 1; i < len(negkps); i++ {
+			for i := 0; i < len(negkps); i++ {
 				aggregateSk = aggregateSk.Sub(aggregateSk, negkps[i].Sk)
 			}
 		}
@@ -195,7 +195,7 @@ func (ctx *SignatureContext) getDiffPubKeyFromKeyPairs(keys []*SigKeyPair, negKe
 			aggregatePk.Add(aggregatePk, keys[i].Pk)
 		}
 		if negKeys != nil && len(negKeys) >= 1 {
-			for i := 1; i < len(negKeys); i++ {
+			for i := 0; i < len(negKeys); i++ {
 				aggregatePk.Sub(aggregatePk, negKeys[i].Pk)
 			}
 		}
@@ -205,7 +205,7 @@ func (ctx *SignatureContext) getDiffPubKeyFromKeyPairs(keys []*SigKeyPair, negKe
 			aggregatePk.Add(aggregatePk, keys[i].Pk)
 		}
 		if negKeys != nil && len(negKeys) >= 1 {
-			for i := 1; i < len(negKeys); i++ {
+			for i := 0; i < len(negKeys); i++ {
 				aggregatePk.Sub(aggregatePk, negKeys[i].Pk)
 			}
 		}
@@ -221,7 +221,7 @@ func (ctx *SignatureContext) getDiffPubKey(keys []*Pubkey, negKeys []*Pubkey, pk
 			aggregatePk.Add(aggregatePk, keys[i].kyber)
 		}
 		if negKeys != nil && len(negKeys) >= 1 {
-			for i := 1; i < len(negKeys); i++ {
+			for i := 0; i < len(negKeys); i++ {
 				aggregatePk.Sub(aggregatePk, negKeys[i].kyber)
 			}
 		}
@@ -231,7 +231,7 @@ func (ctx *SignatureContext) getDiffPubKey(keys []*Pubkey, negKeys []*Pubkey, pk
 			aggregatePk.Add(aggregatePk, keys[i].kyber)
 		}
 		if negKeys != nil && len(negKeys) >= 1 {
-			for i := 1; i < len(negKeys); i++ {
+			for i := 0; i < len(negKeys); i++ {
 				aggregatePk.Sub(aggregatePk, negKeys[i].kyber)
 			}
 		}

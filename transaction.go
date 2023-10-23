@@ -9,6 +9,7 @@ package txhelper
 import (
 	"bytes"
 	"crypto/sha256"
+	"go.dedis.ch/kyber/v3"
 	"golang.org/x/crypto/sha3"
 	"log"
 	"math/rand"
@@ -252,12 +253,20 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 		}
 
 	} else if ctx.txModel == 5 {
+		temp := C.BN_new()
+		totalD := C.BN_new()
+		C.BN_bin2bn((*C.uchar)(unsafe.Pointer(&ctx.bnOne[0])), 33, temp)
+		C.BN_copy(totalD, temp)
 		var txh TxHeader
-		//var user User
 		var pk Pubkey
+		var totalExcess kyber.Point
 		buffer := make([]byte, 33+ctx.sigContext.PkSize)
 		for i := 0; i < ctx.TotalTx; i++ {
-			ctx.getTxHeader(i, &txh)
+			val, err := ctx.getTxHeader(i, &txh)
+			if !val {
+				errM := "Error in tx header data:" + err.Error()
+				return false, &errM
+			}
 			copy(buffer, txh.activityProof)
 			copy(buffer[33:], txh.excessPK)
 
@@ -266,7 +275,38 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 				err := "invalid sig"
 				return false, &err
 			}
+			if i == 0 {
+				totalExcess = pk.kyber.Clone()
+			} else {
+				totalExcess.Add(totalExcess, pk.kyber)
+			}
+			C.BN_bin2bn((*C.uchar)(unsafe.Pointer(&txh.activityProof[0])), 33, temp)
+			C.BN_mod_mul(totalD, totalD, temp, ctx.bnQ, ctx.bnCtx)
 		}
+
+		val, excessBytes, HProd, err := ctx.getAggregateOutData()
+		if !val {
+			errM := "Error in aggregate data:" + err.Error()
+			return false, &errM
+		}
+
+		userHProd := make([]byte, 33)
+		C.BN_bn2binpad(totalD, (*C.uchar)(unsafe.Pointer(&userHProd[0])), 33)
+		if !bytes.Equal(userHProd, HProd) {
+			errM := "Error in aggregate delta"
+			return false, &errM
+		}
+
+		userHProd, err = totalExcess.MarshalBinary()
+		if err != nil {
+			errM := "Error while aggregating pk" + err.Error()
+			return false, &errM
+		}
+		if !bytes.Equal(excessBytes, userHProd) {
+			errM := "Error in aggregate pk"
+			return false, &errM
+		}
+
 	} else if ctx.txModel == 6 {
 		var user User
 		temp := C.BN_new()
@@ -303,8 +343,6 @@ func (ctx *ExeContext) VerifyStoredAllTransaction() (bool, *string) {
 			buf := new(bytes.Buffer)
 			keybuffer := new(bytes.Buffer)
 			var pk Pubkey
-			var keys SigKeyPair
-			ctx.sigContext.getPubKey(&keys) // initiating parameters
 
 			buf.Write(user.Keys)
 			buf.WriteByte(user.N)
