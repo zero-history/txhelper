@@ -63,13 +63,33 @@ func (ctx *ExeContext) checkUniqueness(tx *Transaction) (bool, *string) {
 	for j := 0; j < len(tx.Data.Inputs); j++ {
 		for l := j + 1; l < len(tx.Data.Inputs); l++ {
 			if bytes.Equal(tx.Data.Inputs[j].Header, tx.Data.Inputs[l].Header) {
-				errM := "duplicate headers in inputs"
+				errM := " duplicate headers in inputs : " + strconv.FormatInt(int64(ctx.txModel), 10)
 				return false, &errM
 			}
 		}
 		for l := 0; l < len(tx.Data.Outputs); l++ {
 			if bytes.Equal(tx.Data.Outputs[l].u.H, tx.Data.Inputs[j].Header) {
-				errM := "duplicate headers in input"
+				errM := " duplicate headers in outputs : " + strconv.FormatInt(int64(ctx.txModel), 10)
+				return false, &errM
+			}
+		}
+	}
+
+	// find outputs were duplicated
+	var tempU User
+	if ctx.uType == 2 {
+		for i := 0; i < len(tx.Data.Outputs); i++ {
+			// first check temps
+			foundtemp, _, _, _ := ctx.getTempPeerOut(tx.Data.Outputs[i].header, &tempU)
+			if !foundtemp {
+				// then check db
+				foundDB, _ := ctx.usedPeerOutHeader(tx.Data.Outputs[i].header)
+				if foundDB {
+					errM := " reused headers in outputs : " + strconv.FormatInt(int64(ctx.txModel), 10)
+					return false, &errM
+				}
+			} else {
+				errM := " reused headers in outputs : " + strconv.FormatInt(int64(ctx.txModel), 10)
 				return false, &errM
 			}
 		}

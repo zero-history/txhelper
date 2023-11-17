@@ -486,8 +486,8 @@ func (ctx *ExeContext) utxoAppData(data *AppData, inSize uint8, outSize uint8, a
 	var jsonBytes []byte
 	for i = 0; i < int(outSize); i++ {
 		// a new user with new pk can be created or the existing user with new N can be created
-		choice := rand2.Int() % 2
-		if (choice == 0 || ctx.CurrentUsers >= ctx.TotalUsers) && int(inSize) > i && ctx.txModel != 5 { // use input pk with new n
+		choice := rand2.Int() % ctx.PublicKeyReuse
+		if (choice == 0 || ctx.CurrentUsers >= ctx.TotalUsers) && int(inSize) > i { // use input pk with new n
 			jsonBytes, _ = json.Marshal(&data.Inputs[i].u)
 			if json.Unmarshal(jsonBytes, &data.Outputs[i].u) != nil {
 				log.Fatal("could not copy data")

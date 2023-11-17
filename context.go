@@ -32,9 +32,10 @@ type ExeContext struct {
 	payloadSize      uint16 // data size per output (bytes)
 	averageInputMax  uint8  // average number of inputs will be in [0, averageInputMax]
 	averageOutputMax uint8  // average number of outputs  will be in [0, averageOutputMax]
-	distributionType int    // output Data size distribution
-
-	TotalUsers     int // total number of users represented if this is a client
+	distributionType int    // output Data size distribution (currently only support uniform)
+	PublicKeyReuse   int    // (UTXO models) when a new output is created whether to reuse the input public key or
+	// not will be decided from this such that probability of reuse = 1/publicKeyReuse
+	TotalUsers     int // (ACC models) total number of users represented if this is a client
 	TotalTx        int // total number of transactions if this is a peer
 	TotalBlock     int // total number of blocks  if this is a peer
 	TotalTempUsers int // maximum number of temp users
@@ -62,7 +63,7 @@ type ExeContext struct {
 }
 
 func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uint16, totalUsers int,
-	averageInputMax uint8, averageOutputMax uint8, distributionType int, enableIndexing bool) ExeContext {
+	averageInputMax uint8, averageOutputMax uint8, distributionType int, enableIndexing bool, publicKeyReuse int) ExeContext {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	ctx := ExeContext{
@@ -73,6 +74,7 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 		averageInputMax:        averageInputMax,
 		averageOutputMax:       averageOutputMax,
 		distributionType:       distributionType,
+		PublicKeyReuse:         publicKeyReuse,
 		TotalUsers:             totalUsers,
 		TotalBlock:             0,
 		TotalTx:                0,

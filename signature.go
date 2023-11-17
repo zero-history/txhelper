@@ -416,6 +416,41 @@ func (ctx *SignatureContext) selfMultiplyKeyPairs(kp *SigKeyPair, a []byte) {
 	}
 }
 
+func (ctx *SignatureContext) selfMultiplyPubKeydiff(pk *Pubkey, a []byte, b []byte) {
+
+	if ctx.SigType == 1 {
+		s := ctx.suite.Scalar().SetBytes(a)
+		s2 := ctx.suite.Scalar().SetBytes(b)
+		s = s.Sub(s, s2)
+		pk.kyber = ctx.suite.Point().Mul(s, pk.kyber)
+	}
+	if ctx.SigType == 2 {
+		s := ctx.pairingSuite.G2().Scalar().SetBytes(a)
+		s2 := ctx.pairingSuite.G2().Scalar().SetBytes(b)
+		s = s.Sub(s, s2)
+		pk.kyber = ctx.pairingSuite.G2().Point().Mul(s, pk.kyber)
+	}
+
+}
+
+func (ctx *SignatureContext) selfMultiplyKeyPairsdiff(kp *SigKeyPair, a []byte, b []byte) {
+
+	if ctx.SigType == 1 {
+		s := ctx.suite.Scalar().SetBytes(a)
+		s2 := ctx.suite.Scalar().SetBytes(b)
+		s = s.Sub(s, s2)
+		kp.Sk = ctx.suite.Scalar().Mul(s, kp.Sk)
+		kp.Pk = ctx.suite.Point().Base().Mul(kp.Sk, nil)
+	}
+	if ctx.SigType == 2 {
+		s := ctx.pairingSuite.G2().Scalar().SetBytes(a)
+		s2 := ctx.pairingSuite.G2().Scalar().SetBytes(b)
+		s = s.Sub(s, s2)
+		kp.Sk = ctx.pairingSuite.G2().Scalar().Mul(s, kp.Sk)
+		kp.Pk = ctx.pairingSuite.G2().Point().Base().Mul(kp.Sk, nil)
+	}
+}
+
 // BLSSign is an updated version of original dedis/kyber bls signing for pk-based message signing to avoid searching for duplicate msgs
 // because we already make sure that public keys are unique
 func signBLS(suite pairing.Suite, sk kyber.Scalar, pk kyber.Point, msg []byte) ([]byte, error) {
