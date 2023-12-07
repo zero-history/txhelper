@@ -134,6 +134,7 @@ func TestAggregateBLSSig(tester *testing.T) {
 
 var result bool
 
+/*
 func BenchmarkSignatureContext_VerifySchnor(b *testing.B) {
 	sigCtx := NewSigContext(1)
 	msg := make([]byte, 32)
@@ -249,4 +250,4 @@ func BenchmarkSignatureContext_BatchVerify500(tester *testing.B) {
 		tester.Fatal("invalid aggregate BLS signature")
 	}
 	result = s
-}
+}*/

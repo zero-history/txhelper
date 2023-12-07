@@ -217,6 +217,174 @@ func (ctx *ExeContext) testPeerBatchTransactions(num int, tester *testing.T) {
 
 }
 
+func testFixedTransactionTemp(txType int, sigType int32, txNum int, inSize uint8, outSize uint8, totalUsers int, payload uint16, testname string,
+	tester *testing.B, enableIndexing bool) {
+	var txBytes []byte
+	var tx *Transaction
+	var tx1 Transaction
+
+	averageTxSize := 0
+	averageTxVerTime := time.Duration(0)
+	averagePrepareTime := time.Duration(0)
+	averageUTime := time.Duration(0)
+	averageHeaderTime := time.Duration(0)
+	rand.NewSource(0)
+
+	ctxClient := NewContext(100+txType, 1, txType, sigType, payload, totalUsers, 1, 3, 1, enableIndexing, 1)
+	ctxPeerTemp := NewContext(100+txType, 2, txType, sigType, payload, totalUsers, 1, 3, 1, enableIndexing, 1)
+
+	for i := 0; i < txNum; i++ {
+		tx = ctxClient.RandomTransaction()
+
+		txBytes = ctxClient.ToBytes(tx)
+		ok := ctxPeerTemp.FromBytes(txBytes, &tx1)
+		if !ok {
+			tester.Fatal("couldn't parse tx:", ctxPeerTemp.txModel, ctxPeerTemp.sigContext)
+		}
+
+		_, _ = ctxClient.VerifyIncomingTransaction(tx)
+		ok, _ = ctxClient.UpdateAppDataClient(&tx.Data)
+
+		_, err := ctxPeerTemp.VerifyIncomingTransactionWithTemp(&tx1)
+		ctxPeerTemp.UpdateAppDataPeerToTemp(i, &tx1)
+		//ctxPeerTemp.InsertTxHeader(i, &tx1)
+
+		if err != nil {
+			log.Fatal(i, *err)
+		}
+	}
+	for i := txNum; i < txNum+1; i++ {
+		tx = ctxClient.FixedTransaction(inSize, outSize)
+
+		txBytes = ctxClient.ToBytes(tx)
+		ok := ctxPeerTemp.FromBytes(txBytes, &tx1)
+		if !ok {
+			tester.Fatal("couldn't parse tx:", ctxPeerTemp.txModel, ctxPeerTemp.sigContext)
+		}
+
+		averageTxSize += len(txBytes)
+
+		_, _ = ctxClient.VerifyIncomingTransaction(tx)
+		ok, _ = ctxClient.UpdateAppDataClient(&tx.Data)
+
+		for trial := 0; trial < 1000; trial++ {
+			start := time.Now()
+			_, err := ctxPeerTemp.PrepareAppDataPeerWithTemps(&tx1.Data)
+			averagePrepareTime += time.Since(start)
+			if err != nil {
+				errM := err.Error()
+				log.Fatal(i, errM)
+			}
+
+			start = time.Now()
+			ok, err1 := ctxPeerTemp.checkUniqueness(&tx1)
+			averageUTime += time.Since(start)
+			if !ok {
+				log.Fatal(i, err1)
+			}
+
+			start = time.Now()
+			ok, err2 := ctxPeerTemp.VerifyTxHeader(&tx1.Txh, &tx1.Data)
+			averageHeaderTime += time.Since(start)
+			if !ok {
+				log.Fatal(i, err2)
+			}
+		}
+
+		ctxPeerTemp.UpdateAppDataPeerToTemp(i, &tx1)
+	}
+	ctxClient.db.Close()
+	ctxPeerTemp.db.Close()
+	os.Remove("client" + strconv.FormatInt(int64(100+txType), 10) + ".db")
+	os.Remove("peer" + strconv.FormatInt(int64(100+txType), 10) + ".db")
+
+	file1, err2 := os.OpenFile("data"+testname+".csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err2 != nil {
+		log.Fatalf("failed opening file: %s", err2)
+	}
+	s := fmt.Sprint(txType, ",", sigType, ",", payload, ",", len(tx1.Data.Inputs), ",", len(tx1.Data.Outputs), ",",
+		averageTxSize, ",",
+		(averageTxVerTime / time.Duration(1000)).Microseconds(), ",",
+		(averagePrepareTime / time.Duration(1000)).Microseconds(), ",",
+		(averageUTime / time.Duration(1000)).Microseconds(), ",",
+		(averageHeaderTime / time.Duration(1000)).Microseconds(), ",",
+		((averagePrepareTime + averageUTime + averageHeaderTime) / time.Duration(1000)).Microseconds(), "\n")
+	_, err2 = file1.WriteString(s)
+	if err2 != nil {
+		log.Fatalf("failed writing file: %s", err2)
+	}
+	fmt.Println(txType, ",", sigType, ",", payload, ",", inSize, ",", outSize, ",",
+		averageTxSize)
+}
+
+func max(a uint8, b uint8) uint8 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func BenchmarkExeContext_MicroBenchmarks_inputs(tester *testing.B) {
+	txNum := 20
+	totalUsers := 100
+	// inputs
+	for txType := 1; txType <= 6; txType++ {
+		if txType%2 == 1 { // utxo
+			for inSize := uint8(1); inSize <= uint8(12); inSize++ {
+				testFixedTransactionTemp(txType, 1, txNum, inSize, 2, totalUsers, 8, "input", tester, true)
+			}
+			for inSize := uint8(1); inSize <= uint8(12); inSize++ {
+				testFixedTransactionTemp(txType, 2, txNum, inSize, 2, totalUsers, 8, "input", tester, true)
+			}
+		} else {
+			for inSize := uint8(1); inSize <= uint8(12); inSize++ {
+				testFixedTransactionTemp(txType, 1, txNum, inSize, max(inSize, 2), totalUsers, 8, "input", tester, true)
+			}
+			for inSize := uint8(1); inSize <= uint8(12); inSize++ {
+				testFixedTransactionTemp(txType, 2, txNum, inSize, max(inSize, 2), totalUsers, 8, "input", tester, true)
+			}
+		}
+	}
+}
+
+func BenchmarkExeContext_MicroBenchmarks_outputs(tester *testing.B) {
+	txNum := 20
+	totalUsers := 100
+	// inputs
+	for txType := 1; txType <= 6; txType++ {
+		for outSize := uint8(1); outSize <= uint8(12); outSize++ {
+			testFixedTransactionTemp(txType, 1, txNum, 2, outSize, totalUsers, 8, "output", tester, true)
+		}
+	}
+	for txType := 1; txType <= 6; txType++ {
+		for outSize := uint8(1); outSize <= uint8(12); outSize++ {
+			testFixedTransactionTemp(txType, 2, txNum, 2, outSize, totalUsers, 8, "output", tester, true)
+		}
+	}
+}
+
+func BenchmarkExeContext_MicroBenchmarks_payloads(tester *testing.B) {
+	txNum := 20
+	totalUsers := 100
+	// inputs
+	for txType := 1; txType <= 6; txType++ {
+		for payload := uint16(8); payload <= uint16(4098); payload *= 2 {
+			testFixedTransactionTemp(txType, 1, txNum, 2, 2, totalUsers, payload, "payload", tester, true)
+			testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, payload, "payload", tester, true)
+		}
+	}
+}
+
+func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
+	txNum := 5000
+	totalUsers := 5000
+	// inputs
+	for txType := 1; txType <= 6; txType++ {
+		testFixedTransactionTemp(txType, 1, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
+		testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
+	}
+}
+
 func testFixedTransactionPeer(sigType int32, txNum int, inSize uint8, outSize uint8, totalUsers int, payload uint16, tester *testing.B, enableIndexing bool) {
 	var txBytes []byte
 	var tx *Transaction
@@ -261,14 +429,6 @@ func testFixedTransactionPeer(sigType int32, txNum int, inSize uint8, outSize ui
 				log.Fatal(i, *err)
 			}
 
-			/*_, err = ctxPeerTemp.VerifyIncomingTransactionWithTemp(&tx1)
-
-			ctxPeerTemp.UpdateAppDataPeerToTemp(i, &tx1)
-			//ctxPeerTemp.InsertTxHeader(i, &tx1)
-
-			if err != nil {
-				log.Fatal(i, *err)
-			}*/
 		}
 		for i := txNum; i < txNum+1; i++ {
 			tx = ctxClient.FixedTransaction(inSize, outSize)
@@ -281,12 +441,11 @@ func testFixedTransactionPeer(sigType int32, txNum int, inSize uint8, outSize ui
 
 			averageTxSize += len(txBytes)
 
-			//_, err := ctxClient.VerifyIncomingTransaction(tx)
 			ok, _ = ctxClient.UpdateAppDataClient(&tx.Data)
 
-			for trial := 0; trial < 100; trial++ {
+			for trial := 0; trial < 1000; trial++ {
 				start := time.Now()
-				_, err := ctxPeer.PrepareAppDataPeer(&tx1.Data)
+				_, err := ctxPeer.PrepareAppDataPeerWithTemps(&tx1.Data)
 				averagePrepareTime += time.Since(start)
 				if err != nil {
 					errM := err.Error()
@@ -307,86 +466,38 @@ func testFixedTransactionPeer(sigType int32, txNum int, inSize uint8, outSize ui
 					log.Fatal(i, err2)
 				}
 			}
-
 			ctxPeer.UpdateAppDataPeer(i, &tx1)
 			ctxPeer.InsertTxHeader(i, &tx1)
 
-			/*for trial:= 0; trial <100; trial++ {
-				start := time.Now()
-				_, err := ctxPeerTemp.VerifyIncomingTransactionWithTemp(&tx1)
-				averageTxVerTime += time.Since(start)
-
-				if err != nil {
-					log.Fatal(i, *err)
-				}
-			}
-
-			ctxPeerTemp.UpdateAppDataPeerToTemp(i, &tx1)
-			//ctxPeer.InsertTxHeader(i, &tx1)*/
 		}
 		ctxClient.db.Close()
 		ctxPeer.db.Close()
 		os.Remove("client" + strconv.FormatInt(int64(100+txType), 10) + ".db")
 		os.Remove("peer" + strconv.FormatInt(int64(100+txType), 10) + ".db")
 
-		fmt.Println(txType, sigType, payload, averageTxVerTime/time.Duration(100), averagePrepareTime/time.Duration(100),
-			averageUTime/time.Duration(100), averageHeaderTime/time.Duration(100), (averagePrepareTime+averageUTime+averageHeaderTime)/time.Duration(100))
+		fmt.Println(txType, sigType, payload, inSize, outSize, averageTxSize, averageTxVerTime/time.Duration(1000), averagePrepareTime/time.Duration(1000),
+			averageUTime/time.Duration(1000), averageHeaderTime/time.Duration(1000), (averagePrepareTime+averageUTime+averageHeaderTime)/time.Duration(1000))
 	}
 }
 
-// This a sample benchmark
+/*
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers26(tester *testing.B) {
 	txNum := 5
 	totalUsers := 15
-	testFixedTransactionPeer(1, txNum, 2, 3, totalUsers, 256, tester, true)
-	testFixedTransactionPeer(2, txNum, 2, 3, totalUsers, 256, tester, true)
-}
-
-// This a sample benchmark
-func BenchmarkExeContext_VerifyStoredAllTransactionPeers27(tester *testing.B) {
-	txNum := 5
-	totalUsers := 15
-	testFixedTransactionPeer(1, txNum, 2, 3, totalUsers, 512, tester, true)
-	testFixedTransactionPeer(2, txNum, 2, 3, totalUsers, 512, tester, true)
-}
-
-// This a sample benchmark
-func BenchmarkExeContext_VerifyStoredAllTransactionPeers29(tester *testing.B) {
-	txNum := 5
-	totalUsers := 15
-	testFixedTransactionPeer(1, txNum, 2, 3, totalUsers, 1024, tester, true)
-	testFixedTransactionPeer(2, txNum, 2, 3, totalUsers, 1024, tester, true)
-}
-
-// This a sample benchmark
-func BenchmarkExeContext_VerifyStoredAllTransactionPeers210(tester *testing.B) {
-	txNum := 5
-	totalUsers := 15
-	testFixedTransactionPeer(1, txNum, 2, 3, totalUsers, 2048, tester, true)
-	testFixedTransactionPeer(2, txNum, 2, 3, totalUsers, 2048, tester, true)
-}
-
-// This a sample benchmark
-func BenchmarkExeContext_VerifyStoredAllTransactionPeers211(tester *testing.B) {
-	txNum := 5
-	totalUsers := 120
-	testFixedTransactionPeer(1, txNum, 2, 3, totalUsers, 3072, tester, true)
-	testFixedTransactionPeer(2, txNum, 2, 3, totalUsers, 3072, tester, true)
-}
-
-// This a sample benchmark
-func BenchmarkExeContext_VerifyStoredAllTransactionPeers212(tester *testing.B) {
-	txNum := 5
-	totalUsers := 15
-	testFixedTransactionPeer(1, txNum, 2, 3, totalUsers, 4096, tester, true)
-	testFixedTransactionPeer(2, txNum, 2, 3, totalUsers, 4096, tester, true)
-}
+	testFixedTransactionPeer(1, txNum, 2, 2, totalUsers, 256, tester, true)
+	testFixedTransactionPeer(2, txNum, 2, 2, totalUsers, 256, tester, true)
+}*/
 
 func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload uint16, tester *testing.B, enableIndexing bool) {
 	var txBytes []byte
 	var tx *Transaction
 	var tx1 Transaction
 	block := 0
+
+	file1, err2 := os.OpenFile("dataLedger.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err2 != nil {
+		log.Fatalf("failed opening file: %s", err2)
+	}
 
 	for txType := 1; txType <= 6; txType++ {
 		averageInSize := 0
@@ -401,8 +512,8 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 		for i := 0; i < txNum; i++ {
 			block++
 
-			if block == 200 {
-				tx = ctxClient.FixedTransaction(2, 3)
+			if block == 500 {
+				tx = ctxClient.FixedTransaction(2, 2)
 			} else {
 				tx = ctxClient.RandomTransaction()
 			}
@@ -426,7 +537,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 
 			if block == 500 {
 				averageTxVerTime = time.Duration(0)
-				for trial := 0; trial < 100; trial++ {
+				for trial := 0; trial < 1000; trial++ {
 					start := time.Now()
 					_, err = ctxPeer.VerifyIncomingTransaction(&tx1)
 					averageTxVerTime += time.Since(start)
@@ -484,10 +595,20 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 				if err2 != nil {
 					log.Fatal(err2)
 				}
-				fmt.Println(ctxPeer.txModel, ctxPeer.sigContext.SigType, ctxPeer.payloadSize, ChainVerification/3, ctxPeer.TotalTx, ctxPeer.TotalUsers,
-					ctxPeer.CurrentUsers, ctxPeer.CurrentOutputs, ctxPeer.DeletedOutputs, averageTxSize/txNum,
-					averageTxVerTime/time.Duration(30), float32(averageOutSize)/float32(txNum), fi.Size())
+				fmt.Println(ctxPeer.txModel, ctxPeer.sigContext.SigType, ctxPeer.payloadSize, ChainVerification/3, ctxPeer.TotalTx,
+					ctxPeer.TotalUsers, ctxPeer.CurrentUsers, ctxPeer.CurrentOutputs, ctxPeer.DeletedOutputs, averageTxSize/txNum,
+					averageTxVerTime/time.Duration(1000), float32(averageOutSize)/float32(txNum), fi.Size())
 				block = 0
+
+				s := fmt.Sprint(txType, ",", sigType, ",", payload, ",", (ChainVerification / 3).Microseconds(), ",", ctxPeer.TotalTx, ",",
+					ctxPeer.TotalUsers, ",", ctxPeer.CurrentUsers, ",", ctxPeer.CurrentOutputs, ",", ctxPeer.DeletedOutputs, ",", averageTxSize/txNum, ",",
+					(averageTxVerTime / time.Duration(1000)).Microseconds(), ",",
+					float32(averageOutSize)/float32(txNum), ",", fi.Size(), "\n")
+				_, err2 = file1.WriteString(s)
+				if err2 != nil {
+					log.Fatalf("failed writing file: %s", err2)
+				}
+				fmt.Println(txType, ",", sigType)
 			}
 		}
 
@@ -498,7 +619,6 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 	}
 }
 
-// This a fixed benchmark
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers1(tester *testing.B) {
 	txNum := 5000
 	totalUsers := 5000
