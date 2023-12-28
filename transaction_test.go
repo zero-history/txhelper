@@ -324,6 +324,19 @@ func max(a uint8, b uint8) uint8 {
 	return b
 }
 
+func BenchmarkExeContext_MicroBenchmarks_zutxo(tester *testing.B) {
+	txNum := 20
+	totalUsers := 100
+	// inputs
+	for txType := 1; txType <= 6; txType++ {
+		testFixedTransactionTemp(txType, 1, txNum, 1, 2, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 2, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 3, 3, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 3, 4, totalUsers, 8, "zutxo", tester, true)
+	}
+}
+
 func BenchmarkExeContext_MicroBenchmarks_inputs(tester *testing.B) {
 	txNum := 20
 	totalUsers := 100
