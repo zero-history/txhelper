@@ -335,6 +335,20 @@ func BenchmarkExeContext_MicroBenchmarks_zutxo(tester *testing.B) {
 		testFixedTransactionTemp(txType, 1, txNum, 3, 3, totalUsers, 8, "zutxo", tester, true)
 		testFixedTransactionTemp(txType, 1, txNum, 3, 4, totalUsers, 8, "zutxo", tester, true)
 	}
+	for txType := 1; txType <= 6; txType++ {
+		testFixedTransactionTemp(txType, 1, txNum, 1, 2, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 2, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 3, 3, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 3, 4, totalUsers, 8, "zutxo", tester, true)
+	}
+	for txType := 1; txType <= 6; txType++ {
+		testFixedTransactionTemp(txType, 1, txNum, 1, 2, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 2, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 3, 3, totalUsers, 8, "zutxo", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 3, 4, totalUsers, 8, "zutxo", tester, true)
+	}
 }
 
 func BenchmarkExeContext_MicroBenchmarks_inputs(tester *testing.B) {
@@ -567,7 +581,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 			averageInSize += len(tx1.Data.Inputs)
 			averageOutSize += len(tx1.Data.Outputs)
 
-			if block == 500 {
+			if block == 1000 {
 				var val bool
 				var err *string
 				start := time.Now()
@@ -634,7 +648,21 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers1(tester *testing.B) {
 	txNum := 5000
-	totalUsers := 5000
+	totalUsers := 10000
 	testRandomTransactionPeer(1, txNum, totalUsers, 8, tester, true)
 	testRandomTransactionPeer(2, txNum, totalUsers, 8, tester, true)
+}
+
+func BenchmarkExeContext_VerifyStoredAllTransactionPeers2(tester *testing.B) {
+	txNum := 5000
+	totalUsers := 10000
+	testRandomTransactionPeer(1, txNum, totalUsers, 32, tester, true)
+	testRandomTransactionPeer(2, txNum, totalUsers, 32, tester, true)
+}
+
+func BenchmarkExeContext_VerifyStoredAllTransactionPeers3(tester *testing.B) {
+	txNum := 5000
+	totalUsers := 10000
+	testRandomTransactionPeer(1, txNum, totalUsers, 64, tester, true)
+	testRandomTransactionPeer(2, txNum, totalUsers, 64, tester, true)
 }
