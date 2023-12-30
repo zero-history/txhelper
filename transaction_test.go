@@ -533,8 +533,8 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 		averageTxVerTime := time.Duration(0)
 		rand.NewSource(0)
 
-		ctxClient := NewContext(100+txType, 1, txType, sigType, payload, totalUsers, 3, 5, 1, enableIndexing, 1)
-		ctxPeer := NewContext(100+txType, 2, txType, sigType, payload, totalUsers, 3, 5, 1, enableIndexing, 1)
+		ctxClient := NewContext(100+txType, 1, txType, sigType, payload, totalUsers, 2, 3, 1, enableIndexing, 1)
+		ctxPeer := NewContext(100+txType, 2, txType, sigType, payload, totalUsers, 2, 3, 1, enableIndexing, 1)
 
 		for i := 0; i < txNum; i++ {
 			block++
