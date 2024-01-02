@@ -335,7 +335,7 @@ func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
 	totalUsers := 1000
 	// inputs
 	for txType := 1; txType <= 6; txType++ {
-		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "realistic", tester, true)
+		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "calibrating", tester, true)
 		//testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
 	}
 }
