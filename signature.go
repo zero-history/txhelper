@@ -430,7 +430,6 @@ func (ctx *SignatureContext) selfMultiplyPubKeydiff(pk *Pubkey, a []byte, b []by
 		s = s.Sub(s, s2)
 		pk.kyber = ctx.pairingSuite.G2().Point().Mul(s, pk.kyber)
 	}
-
 }
 
 func (ctx *SignatureContext) selfMultiplyKeyPairsdiff(kp *SigKeyPair, a []byte, b []byte) {

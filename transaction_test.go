@@ -313,8 +313,14 @@ func testFixedTransactionTemp(txType int, sigType int32, txNum int, inSize uint8
 	if err2 != nil {
 		log.Fatalf("failed writing file: %s", err2)
 	}
-	fmt.Println(txType, ",", sigType, ",", payload, ",", inSize, ",", outSize, ",",
-		averageTxSize)
+	//fmt.Println(txType, ",", sigType, ",", payload, ",", inSize, ",", outSize, ",", averageTxSize)
+	fmt.Println(txType, ",", sigType, ",", payload, ",", len(tx1.Data.Inputs), ",", len(tx1.Data.Outputs), ",",
+		averageTxSize, ",",
+		(averageTxVerTime / time.Duration(1000)).Microseconds(), ",",
+		(averagePrepareTime / time.Duration(1000)).Microseconds(), ",",
+		(averageUTime / time.Duration(1000)).Microseconds(), ",",
+		(averageHeaderTime / time.Duration(1000)).Microseconds(), ",",
+		((averagePrepareTime + averageUTime + averageHeaderTime) / time.Duration(1000)).Microseconds())
 }
 
 func max(a uint8, b uint8) uint8 {
@@ -324,6 +330,17 @@ func max(a uint8, b uint8) uint8 {
 	return b
 }
 
+func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
+	txNum := 20
+	totalUsers := 1000
+	// inputs
+	for txType := 1; txType <= 6; txType++ {
+		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "realistic", tester, true)
+		//testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
+	}
+}
+
+/*
 func BenchmarkExeContext_MicroBenchmarks_zutxo(tester *testing.B) {
 	txNum := 20
 	totalUsers := 100
@@ -411,6 +428,7 @@ func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
 		testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
 	}
 }
+*/
 
 func testFixedTransactionPeer(sigType int32, txNum int, inSize uint8, outSize uint8, totalUsers int, payload uint16, tester *testing.B, enableIndexing bool) {
 	var txBytes []byte
@@ -646,6 +664,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 	}
 }
 
+/*
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers1(tester *testing.B) {
 	txNum := 5000
 	totalUsers := 10000
@@ -673,3 +692,4 @@ func BenchmarkExeContext_VerifyStoredAllTransactionPeers5(tester *testing.B) {
 	testRandomTransactionPeer(1, txNum, totalUsers, 64, tester, true, 3)
 	testRandomTransactionPeer(2, txNum, totalUsers, 64, tester, true, 3)
 }
+*/

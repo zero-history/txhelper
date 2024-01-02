@@ -27,19 +27,18 @@ func (ctx *ExeContext) computeAppActivity(data *AppData) (activityProof []byte) 
 
 	for i := 0; i < len(data.Inputs); i++ {
 		C.BN_bin2bn((*C.uchar)(unsafe.Pointer(&data.Inputs[i].Header[0])), 32, temp)
-		C.BN_mod_inverse(temp, temp, ctx.bnQ, ctx.bnCtx)
 		C.BN_mod_mul(d, d, temp, ctx.bnQ, ctx.bnCtx)
-		C.BN_clear(temp)
-		C.BN_bn2binpad(d, (*C.uchar)(unsafe.Pointer(&printer[0])), 33)
 	}
+	C.BN_mod_inverse(d, d, ctx.bnQ, ctx.bnCtx)
+
 	for i := 0; i < len(data.Outputs); i++ {
 		C.BN_bin2bn((*C.uchar)(unsafe.Pointer(&data.Outputs[i].header[0])), 32, temp)
 		C.BN_mod_mul(d, d, temp, ctx.bnQ, ctx.bnCtx)
-		C.BN_clear(temp)
-		C.BN_bn2binpad(d, (*C.uchar)(unsafe.Pointer(&printer[0])), 33)
 	}
 	activityProof = make([]byte, 33)
 	C.BN_bn2binpad(d, (*C.uchar)(unsafe.Pointer(&activityProof[0])), 33)
+	C.BN_clear_free(temp)
+	C.BN_clear_free(d)
 	return activityProof
 }
 

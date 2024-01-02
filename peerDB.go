@@ -89,7 +89,7 @@ func (ctx *ExeContext) initPeerDB() (bool, error) {
 		}
 	} else if ctx.txModel == 5 {
 		statement := "DROP TABLE IF EXISTS outputs; " +
-			"CREATE TABLE outputs(id INTEGER PRIMARY KEY AUTOINCREMENT, h BLOB UNIQUE, pk BLOB, n INTEGER, Data BLOB, used INTEGER);"
+			"CREATE TABLE outputs(id INTEGER PRIMARY KEY AUTOINCREMENT, h BLOB UNIQUE, pk BLOB, n INTEGER, Data BLOB, used INTEGER);" //todo: add txn
 		_, err = ctx.db.Exec(statement)
 		if err != nil {
 			return false, err
@@ -641,7 +641,7 @@ func (ctx *ExeContext) getAggregateOutData() (bool, []byte, []byte, error) {
 	id := 0
 	used := 0
 	var out User
-	stmt, _ := ctx.db.Prepare("SELECT id, pk, n, data, used  FROM outputs;")
+	stmt, _ := ctx.db.Prepare("SELECT id, pk, n, data, used  FROM outputs;") //todo: add txn
 	rows, err := stmt.Query()
 	if err != nil {
 		return false, nil, nil, err
@@ -665,7 +665,7 @@ func (ctx *ExeContext) getAggregateOutData() (bool, []byte, []byte, error) {
 		C.BN_mod_mul(totalD, totalD, temp, ctx.bnQ, ctx.bnCtx)
 
 		ctx.sigContext.unmarshelPublicKeysFromBytes(&pk, out.Keys)
-		ctx.sigContext.selfMultiplyPubKey(&pk, header)
+		ctx.sigContext.selfMultiplyPubKey(&pk, header) //todo: modify
 		if first == 0 {
 			totalExcess = pk.kyber.Clone()
 			first++
