@@ -41,8 +41,8 @@ txModel:6 - origamiACC
 */
 func (ctx *ExeContext) RandomTransaction() *Transaction {
 	// variable sizes
-	inSize := uint8(rand.Int() % int(ctx.averageInputMax+1))
-	outSize := uint8(rand.Int()%int(ctx.averageOutputMax)) + 1
+	inSize := uint8(rand.Int() % int(ctx.AverageInputMax+1))
+	outSize := uint8(rand.Int()%int(ctx.AverageOutputMax)) + 1
 
 	var tx = new(Transaction)
 	ctx.RandomAppData(&tx.Data, inSize, outSize, ctx.payloadSize)

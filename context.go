@@ -30,8 +30,8 @@ type ExeContext struct {
 	txModel          int // transaction model
 	sigContext       *SignatureContext
 	payloadSize      uint16 // data size per output (bytes)
-	averageInputMax  uint8  // average number of inputs will be in [0, averageInputMax]
-	averageOutputMax uint8  // average number of outputs  will be in [0, averageOutputMax]
+	AverageInputMax  uint8  // average number of inputs will be in [0, AverageInputMax]
+	AverageOutputMax uint8  // average number of outputs  will be in [0, AverageOutputMax]
 	distributionType int    // output Data size distribution (currently only support uniform)
 	PublicKeyReuse   int    // (UTXO models) when a new output is created whether to reuse the input public key or
 	// not will be decided from this such that probability of reuse = 1/publicKeyReuse
@@ -71,8 +71,8 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 		uType:                  uType,
 		txModel:                txType,
 		payloadSize:            averageSize,
-		averageInputMax:        averageInputMax,
-		averageOutputMax:       averageOutputMax,
+		AverageInputMax:        averageInputMax,
+		AverageOutputMax:       averageOutputMax,
 		distributionType:       distributionType,
 		PublicKeyReuse:         publicKeyReuse,
 		TotalUsers:             totalUsers,
@@ -101,11 +101,11 @@ func NewContext(exeId int, uType int, txType int, sigType int32, averageSize uin
 	ctx.sigContext.SigType = sigType
 
 	if averageInputMax > averageOutputMax {
-		log.Fatal("can't be averageInputMax > averageOutputMax")
+		log.Fatal("can't be AverageInputMax > AverageOutputMax")
 	}
 
 	if int(averageInputMax) >= totalUsers {
-		log.Fatal("can't be averageInputMax >= TotalUsers")
+		log.Fatal("can't be AverageInputMax >= TotalUsers")
 	}
 
 	// generate all users for clients
@@ -147,8 +147,8 @@ func (ctx *ExeContext) PrintDetails() {
 	fmt.Println("tx model:", ctx.txModel)
 	fmt.Println("sig type:", ctx.sigContext.SigType)
 	fmt.Println("payload size:", ctx.payloadSize)
-	fmt.Println("input max:", ctx.averageInputMax)
-	fmt.Println("output max:", ctx.averageOutputMax)
+	fmt.Println("input max:", ctx.AverageInputMax)
+	fmt.Println("output max:", ctx.AverageOutputMax)
 	fmt.Println("transactions:", ctx.TotalTx)
 	fmt.Println("users:", ctx.CurrentUsers)
 	fmt.Println("outputs:", ctx.CurrentOutputs)

@@ -102,8 +102,8 @@ func (ctx *ExeContext) testPeerTransactions(num int, tester *testing.T) {
 
 	rand.NewSource(0)
 
-	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
-	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
+	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.AverageInputMax, ctx.AverageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
+	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.AverageInputMax, ctx.AverageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
 
 	for i := 0; i < num; i++ {
 		tx = ctxClient.RandomTransaction()
@@ -161,8 +161,8 @@ func (ctx *ExeContext) testPeerBatchTransactions(num int, tester *testing.T) {
 
 	rand.NewSource(0)
 
-	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
-	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.averageInputMax, ctx.averageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
+	ctxClient := NewContext(ctx.exeId+115, 1, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.AverageInputMax, ctx.AverageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
+	ctxPeer := NewContext(ctx.exeId+115, 2, ctx.txModel, ctx.sigContext.SigType, ctx.payloadSize, ctx.TotalUsers, ctx.AverageInputMax, ctx.AverageOutputMax, ctx.distributionType, ctx.enableIndexing, ctx.PublicKeyReuse)
 
 	for i := 0; i < num; i++ {
 

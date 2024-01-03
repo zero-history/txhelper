@@ -553,7 +553,7 @@ func (ctx *ExeContext) accAppData(data *AppData, inSize uint8, outSize uint8, av
 
 	if ctx.CurrentUsers == 0 {
 		inSize = 0
-		outSize = ctx.averageInputMax // to avoid overlapping between pk for the 2nd transaction
+		outSize = ctx.AverageInputMax // to avoid overlapping between pk for the 2nd transaction
 	} else if ctx.CurrentUsers == ctx.TotalUsers { // should not add more accounts
 		inSize = outSize
 	}
