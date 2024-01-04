@@ -331,12 +331,14 @@ func max(a uint8, b uint8) uint8 {
 }
 
 func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
-	txNum := 10
-	totalUsers := 20
-	// inputs
-	for txType := 1; txType <= 6; txType++ {
-		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "calibrating", tester, true)
-		//testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
+	for trial := 0; trial < 100; trial++ {
+		txNum := 10
+		totalUsers := 20
+		// inputs
+		for txType := 1; txType <= 6; txType++ {
+			testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "calibrating", tester, true)
+			//testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
+		}
 	}
 }
 
