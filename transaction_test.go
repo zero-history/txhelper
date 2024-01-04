@@ -331,8 +331,8 @@ func max(a uint8, b uint8) uint8 {
 }
 
 func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
-	txNum := 20
-	totalUsers := 1000
+	txNum := 10
+	totalUsers := 20
 	// inputs
 	for txType := 1; txType <= 6; txType++ {
 		testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "calibrating", tester, true)

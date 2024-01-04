@@ -3,7 +3,9 @@ package txhelper
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func TestSig(tester *testing.T) {
@@ -134,7 +136,6 @@ func TestAggregateBLSSig(tester *testing.T) {
 
 var result bool
 
-/*
 func BenchmarkSignatureContext_VerifySchnor(b *testing.B) {
 	sigCtx := NewSigContext(1)
 	msg := make([]byte, 32)
@@ -144,9 +145,12 @@ func BenchmarkSignatureContext_VerifySchnor(b *testing.B) {
 	sig := sigCtx.sign(&keys, msg)
 	pk := sigCtx.getPubKey(&keys)
 	var s bool
+	start := time.Now()
 	for i := 0; i < b.N; i++ {
 		s = sigCtx.verify(&pk, msg, sig)
 	}
+	end := time.Since(start)
+	fmt.Println("Schnorr: ", (end / time.Duration(b.N)).Microseconds())
 	result = s
 }
 
@@ -159,9 +163,12 @@ func BenchmarkSignatureContext_VerifyBLS(b *testing.B) {
 	sig := sigCtx.sign(&keys, msg)
 	pk := sigCtx.getPubKey(&keys)
 	var s bool
+	start := time.Now()
 	for i := 0; i < b.N; i++ {
 		s = sigCtx.verify(&pk, msg, sig)
 	}
+	end := time.Since(start)
+	fmt.Println("BLS1: ", (end / time.Duration(b.N)).Microseconds())
 	result = s
 }
 
@@ -185,16 +192,19 @@ func BenchmarkSignatureContext_BatchVerify5(tester *testing.B) {
 
 	aggregateSig := sigCtx.aggregateSignatures(sigs)
 	var s bool
+	start := time.Now()
 	for i := 0; i < tester.N; i++ {
 		s = sigCtx.batchVerify(pks, msg, aggregateSig) // todo add aggregated
 	}
+	end := time.Since(start)
+	fmt.Println("BLS5: ", (end / time.Duration(tester.N)).Microseconds())
 	if !s {
 		tester.Fatal("invalid aggregate BLS signature")
 	}
 	result = s
 }
 
-func BenchmarkSignatureContext_BatchVerify50(tester *testing.B) {
+/* func BenchmarkSignatureContext_BatchVerify50(tester *testing.B) {
 	sigCtx := NewSigContext(2)
 	num := 50
 	msg := make([]byte, 32)
