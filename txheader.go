@@ -8,7 +8,9 @@ package txhelper
 
 import (
 	"bytes"
+	"fmt"
 	"log"
+	"time"
 )
 
 // #cgo CFLAGS: -g -Wall
@@ -569,14 +571,14 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 	pluskeys := make([]Pubkey, len(data.Outputs))
 
 	// compute header
-	//start := time.Now()
+	start := time.Now()
 	for i := 0; i < len(data.Outputs); i++ {
 		data.Outputs[i].header = ctx.computeOutIdentifier(data.Outputs[i].Pk, data.Outputs[i].N, data.Outputs[i].Data)
 	}
-	//end := time.Since(start)
-	//fmt.Print("zutxo: ", (end / time.Duration(1)).Microseconds(), " ")
+	end := time.Since(start)
+	fmt.Print("zutxo: ", (end / time.Duration(1)).Microseconds(), " ")
 
-	//start = time.Now()
+	start = time.Now()
 	// create keys
 	for i := 0; i < len(data.Outputs); i++ {
 		if len(data.Inputs) > i && bytes.Equal(data.Inputs[i].u.Keys[:ctx.sigContext.PkSize], data.Outputs[i].Pk) == true {
@@ -597,18 +599,18 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 			negkeyLen++
 		}
 	}
-	//end = time.Since(start)
-	//fmt.Print((end / time.Duration(1)).Microseconds(), " ")
+	end = time.Since(start)
+	fmt.Print((end / time.Duration(1)).Microseconds(), " ")
 
-	//start = time.Now()
+	start = time.Now()
 	txh.activityProof = ctx.computeAppActivity(data) // to compute header - must be after computeOutIdentifier
-	//end = time.Since(start)
-	//fmt.Print((end / time.Duration(1)).Microseconds(), " ")
+	end = time.Since(start)
+	fmt.Print((end / time.Duration(1)).Microseconds(), " ")
 
-	//start = time.Now()
+	start = time.Now()
 	txh.excessPK = ctx.sigContext.diffPK(keysP, negkeysP[:negkeyLen])
-	//end = time.Since(start)
-	//fmt.Print((end / time.Duration(1)).Microseconds(), " ")
+	end = time.Since(start)
+	fmt.Print((end / time.Duration(1)).Microseconds(), " ")
 
 	buffer.Write(txh.activityProof)
 	buffer.Write(txh.excessPK)
@@ -620,8 +622,8 @@ func (ctx *ExeContext) verifyUtxoOrigamiTxHeader(txh *TxHeader, data *AppData) (
 		err := "invalid sig"
 		return false, &err
 	}
-	//end = time.Since(start)
-	//fmt.Println((end / time.Duration(1)).Microseconds())
+	end = time.Since(start)
+	fmt.Println((end / time.Duration(1)).Microseconds())
 
 	return true, nil
 }

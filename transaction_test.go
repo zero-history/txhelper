@@ -331,7 +331,7 @@ func max(a uint8, b uint8) uint8 {
 }
 
 func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
-	for trial := 0; trial < 100; trial++ {
+	for trial := 0; trial < 1; trial++ {
 		txNum := 10
 		totalUsers := 20
 		// inputs
