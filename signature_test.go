@@ -150,7 +150,7 @@ func BenchmarkSignatureContext_VerifySchnor(b *testing.B) {
 		s = sigCtx.verify(&pk, msg, sig)
 	}
 	end := time.Since(start)
-	fmt.Println("Schnorr: ", (end / time.Duration(b.N)).Microseconds())
+	fmt.Println("Schnorr: ", b.N, (end / time.Duration(b.N)).Microseconds())
 	result = s
 }
 
@@ -168,7 +168,7 @@ func BenchmarkSignatureContext_VerifyBLS(b *testing.B) {
 		s = sigCtx.verify(&pk, msg, sig)
 	}
 	end := time.Since(start)
-	fmt.Println("BLS1: ", (end / time.Duration(b.N)).Microseconds())
+	fmt.Println("BLS1: ", b.N, (end / time.Duration(b.N)).Microseconds())
 	result = s
 }
 
@@ -197,7 +197,7 @@ func BenchmarkSignatureContext_BatchVerify5(tester *testing.B) {
 		s = sigCtx.batchVerify(pks, msg, aggregateSig) // todo add aggregated
 	}
 	end := time.Since(start)
-	fmt.Println("BLS5: ", (end / time.Duration(tester.N)).Microseconds())
+	fmt.Println("BLS5: ", tester.N, (end / time.Duration(tester.N)).Microseconds())
 	if !s {
 		tester.Fatal("invalid aggregate BLS signature")
 	}
