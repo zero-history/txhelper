@@ -330,7 +330,6 @@ func max(a uint8, b uint8) uint8 {
 	return b
 }
 
-
 func BenchmarkExeContext_MicroBenchmarks_zutxo(tester *testing.B) {
 	txNum := 20
 	totalUsers := 100
@@ -409,7 +408,7 @@ func BenchmarkExeContext_MicroBenchmarks_payloads(tester *testing.B) {
 	}
 }
 
-func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
+/* func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
 	txNum := 5000
 	totalUsers := 5000
 	// inputs
@@ -654,7 +653,6 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 	}
 }
 
-
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers1(tester *testing.B) {
 	txNum := 5000
 	totalUsers := 10000
@@ -682,5 +680,3 @@ func BenchmarkExeContext_VerifyStoredAllTransactionPeers5(tester *testing.B) {
 	testRandomTransactionPeer(1, txNum, totalUsers, 64, tester, true, 3)
 	testRandomTransactionPeer(2, txNum, totalUsers, 64, tester, true, 3)
 }
-
-
