@@ -330,19 +330,7 @@ func max(a uint8, b uint8) uint8 {
 	return b
 }
 
-func BenchmarkExeContext_MicroBenchmarks_Realistic(tester *testing.B) {
-	for trial := 0; trial < 1; trial++ {
-		txNum := 10
-		totalUsers := 20
-		// inputs
-		for txType := 1; txType <= 6; txType++ {
-			testFixedTransactionTemp(txType, 1, txNum, 2, 3, totalUsers, 8, "calibrating", tester, true)
-			//testFixedTransactionTemp(txType, 2, txNum, 2, 2, totalUsers, 8, "realistic", tester, true)
-		}
-	}
-}
 
-/*
 func BenchmarkExeContext_MicroBenchmarks_zutxo(tester *testing.B) {
 	txNum := 20
 	totalUsers := 100
@@ -642,7 +630,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 				if err2 != nil {
 					log.Fatal(err2)
 				}
-				fmt.Println(ctxPeer.txModel, ctxPeer.sigContext.SigType, ctxPeer.payloadSize, ChainVerification/3, ctxPeer.TotalTx,
+				fmt.Println(ctxPeer.txModel, ctxPeer.sigContext.SigType, ctxPeer.payloadSize, ctxPeer.AverageInputMax, ctxPeer.AverageOutputMax, ChainVerification/3, ctxPeer.TotalTx,
 					ctxPeer.TotalUsers, ctxPeer.CurrentUsers, ctxPeer.CurrentOutputs, ctxPeer.DeletedOutputs, averageTxSize/txNum,
 					averageTxVerTime/time.Duration(1000), float32(averageOutSize)/float32(txNum), fi.Size())
 				block = 0
@@ -666,7 +654,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 	}
 }
 
-/*
+
 func BenchmarkExeContext_VerifyStoredAllTransactionPeers1(tester *testing.B) {
 	txNum := 5000
 	totalUsers := 10000
@@ -694,4 +682,5 @@ func BenchmarkExeContext_VerifyStoredAllTransactionPeers5(tester *testing.B) {
 	testRandomTransactionPeer(1, txNum, totalUsers, 64, tester, true, 3)
 	testRandomTransactionPeer(2, txNum, totalUsers, 64, tester, true, 3)
 }
-*/
+
+
