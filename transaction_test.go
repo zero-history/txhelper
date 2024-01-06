@@ -569,7 +569,7 @@ func testRandomTransactionPeer(sigType int32, txNum int, totalUsers int, payload
 				fmt.Println(i, *err)
 			}
 
-			if block == 500 {
+			if block == 5000 {
 				averageTxVerTime = time.Duration(0)
 				for trial := 0; trial < 1000; trial++ {
 					start := time.Now()
